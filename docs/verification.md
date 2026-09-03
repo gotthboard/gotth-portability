@@ -3,7 +3,7 @@
 Current worker verification:
 
 - Go 1.26.6 format, diff check, vet, build, race, and coverage pass locally.
-- Hardened source `fa12f158ed4c0cf97a95d2cc67da5a0a1a986d40` reports
+- Hardened source `63b7c8af4450e577d8f834d7592fcea0b32d6a3d` reports
   93.6% race-instrumented statement coverage. Residual statements are
   defensive malformed-checkpoint/header, impossible count-overflow, and rare
   delegated-I/O branches; every public operation, sentinel family, record state
@@ -27,9 +27,10 @@ Current worker verification:
 - Direct state-boundary tests prove that every documented `WriteRecord` and
   `Next` preflight failure consumes no record/frame I/O and permits retry, while
   failure after partial output/input poisons the object.
-- Complexity contracts account for checkpoint validation's temporary canonical
-  header allocation. ParseCheckpoint distinguishes constant-time prefix/length
-  rejection from the linear checksum and valid-input path.
+- Complexity contracts account for constant-time constructor rejection and
+  checkpoint validation's temporary canonical header allocation. `NewExporter`
+  and `ParseCheckpoint` distinguish constant-time rejection from their tight
+  valid successful/input paths.
 - Every public sentinel is injected through export Reader/Writer,
   compatibility, begin, staged write, commit, and abort callbacks. Only the
   library classification participates in `errors.Is`; `Causer` retains explicit
@@ -65,7 +66,7 @@ callback-identity, I/O-contract, retry/poisoning contract, cost-bound, wire,
 allocation, fuzz-oracle, and evidence corrections. Focused and full gates are
 revision-matched to the current source. Performance, clean-clone,
 external-consumer, graph, and fuzz evidence remain the `d22c2de` runtime
-baseline; `fa12f15` changes comments and tests, not runtime behavior. A real
-downstream consumer schema/pin does not yet exist; workflow therefore remains
-`in_progress` and unreleased. Independent final admission remains
-orchestrator-owned.
+baseline; `63b7c8a` changes comments, documentation, and tests, not runtime
+behavior. A real downstream consumer schema/pin does not yet exist; workflow
+therefore remains `in_progress` and unreleased. Independent final admission
+remains orchestrator-owned.

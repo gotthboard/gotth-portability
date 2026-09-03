@@ -8,6 +8,39 @@ uses the named commit's Git author time, rendered to the minute in CDT.
 
 ## Unreleased
 
+### 2026-09-03 14:22 CDT — Close constructor-cost and chronology audit
+
+Implementation commit: `63b7c8af4450e577d8f834d7592fcea0b32d6a3d`.
+Evidence commit: this documentation-only commit. The heading uses the verified
+implementation commit author time.
+
+Affected files:
+
+- `pkg/portability/export.go`
+- `docs/CHANGELOG.md`
+- workflow exact evidence record
+
+Explanation:
+
+Correct `NewExporter`'s general time and auxiliary-space lower bounds to
+`Omega(1)` and limit its tight linear bounds to valid successful paths.
+Normalize seven historical changelog headings to their named commits' Git
+author times, restore descending chronology, and document the timestamp
+provenance convention.
+
+Verification:
+
+- retained contract audit checks the constructor claim and all headings present
+  at the implementation commit against exact Git author time and document order
+- full format/diff/vet/race/coverage/build passes at 93.6% statement coverage
+- fresh traces bind both gates to exact implementation `63b7c8a`
+
+Risks / non-goals:
+
+- Runtime behavior and the V1 wire format are unchanged.
+- No downstream consumer schema or pin is fabricated. Workflow stays
+  `in_progress` and unreleased.
+
 ### 2026-09-03 14:06 CDT — Specify retry and poisoning boundaries
 
 Implementation commit: `fa12f158ed4c0cf97a95d2cc67da5a0a1a986d40`.

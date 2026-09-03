@@ -16,6 +16,8 @@
   `8d7836c09cf5e35c5088065c0a3906ae1ddb3e2e`.
 - Final live-exporter contract qualification:
   `fa12f158ed4c0cf97a95d2cc67da5a0a1a986d40`.
+- Constructor-cost and changelog-provenance correction:
+  `63b7c8af4450e577d8f834d7592fcea0b32d6a3d`.
 - Branch/worktree: `feature/v1-portability` at
   `/tmp/gotth-portability-worktrees/v1-portability`.
 - No push, PR, tag, release, deployment, live database, secret, or remote state
@@ -55,9 +57,9 @@ Passed locally:
 git diff --check -- .
 go vet -mod=readonly ./...
 go build -mod=readonly ./...
-go test -mod=readonly -race -count=3 ./pkg/portability -run 'TestExporterWriteRecordPreflightIsRetryableAndProgressFailurePoisons|TestImporterNextPreflightIsRetryableAndFrameProgressPoisons'
+bash /tmp/gotth-portability-contract-check-63b7c8a.sh
 make verify
-go test -mod=readonly -race -coverprofile=/tmp/gotth-portability-coverage-fa12f15.out ./...
+go test -mod=readonly -race -count=1 -coverprofile=/tmp/gotth-portability-coverage-63b7c8a.out ./...
 ```
 
 Hardened source coverage is 93.6% under race. Boundary, negative, staged sink,
@@ -74,6 +76,9 @@ Simultaneous begin failure and cancellation retain `ErrSink`, `ErrIO`, and both
 raw causes. Both nil/error returns after a cleanup deadline have direct tests.
 Exact-valid fuzz seeds require the commit entry even for empty payload.
 Residual lines are defensive variants within already-covered classifications.
+The focused contract audit also proves `NewExporter`'s general `Omega(1)` bound
+and compares every heading present at implementation commit `63b7c8a` to the
+named Git commit's author minute while enforcing descending document order.
 
 The runtime implementation is unchanged from `d22c2de`; its retained fresh
 five-second fuzz runs were:
@@ -143,17 +148,18 @@ remains redaction-safe.
 
 | Current-source retained artifact | SHA-256 |
 | --- | --- |
-| `/tmp/gotth-portability-focused-fa12f15.log` | `f004b1d9b549904898bc5ed9cb9a521d51b35a4befd46e6df262b80806e3b025` |
-| `/tmp/gotth-portability-focused-fa12f15.raw.log` | `12a33b37f9567fe298eaca91cd3ae5bd53ecb87bd5a15ca2b269a4e7bf19ba82` |
-| `/tmp/gotth-portability-verify-fa12f15.log` | `5ca68285179f7652a03bd462acbff64d010ca5e92bdf86e7fb88060f2919c653` |
-| `/tmp/gotth-portability-verify-fa12f15.raw.log` | `00f07a4e6e0deed70a4f75444b225341e4e798262a485303e3ace64502877e3d` |
-| `/tmp/gotth-portability-coverage-fa12f15.log` | `df1c1f439496ab08acc74cc39569add669cd38dbdfc515e4af9d2365e54bbf74` |
-| `/tmp/gotth-portability-coverage-fa12f15.raw.log` | `8f2598a13a771c58aa6c71121071da82342e25b64114e6dcd2260d2ba38d95f7` |
-| `/tmp/gotth-portability-coverage-fa12f15.out` | `f73459c37e7b6fd76beaec9b299bfb47427d808f622dd42479fdb22f029f2085` |
+| `/tmp/gotth-portability-contract-63b7c8a.log` | `532850d2138a1aa4c57ab0d64bf43ab4286febe6ead4dfbbf3be10fcf07f2956` |
+| `/tmp/gotth-portability-contract-63b7c8a.raw.log` | `203875350dc9b04020cfec372572691f9eb8f4b2dd6edcea13b4448d9b9129b7` |
+| `/tmp/gotth-portability-contract-check-63b7c8a.sh` | `0881ea0fc3844e6a32f11839528ab1f8afc7344875587420d5aaf25e12f91a60` |
+| `/tmp/gotth-portability-verify-63b7c8a.log` | `226f3c85bd20fb608ea08b563794974e9211a8f61c7e001f633b27496cc47807` |
+| `/tmp/gotth-portability-verify-63b7c8a.raw.log` | `00f07a4e6e0deed70a4f75444b225341e4e798262a485303e3ace64502877e3d` |
+| `/tmp/gotth-portability-coverage-63b7c8a.log` | `1773d73c920eba02285aaffa63469a4bafbe1b9402a60b4e094b0c954dcbc959` |
+| `/tmp/gotth-portability-coverage-63b7c8a.raw.log` | `7b2575b6905bb690573d9cade464e6543211ff792b404054475696084f89e2d3` |
+| `/tmp/gotth-portability-coverage-63b7c8a.out` | `2b3dd68f02583c8ad3d6ccb4a0eaf9f32ac3a01eeea0828dd2cca46d8e52ec11` |
 
 The following artifacts bind runtime baseline `d22c2de`. They remain relevant
-because `fa12f15` changes comments and tests only; they are not represented as
-current-source executions.
+because `63b7c8a` changes comments, documentation, and tests only; they are not
+represented as current-source executions.
 
 | Unchanged-runtime baseline artifact | SHA-256 |
 | --- | --- |
@@ -235,6 +241,12 @@ documents the actual retry/progress boundary, corrects the bounds, and adds
 direct state-transition tests. Fresh focused, full, and coverage traces bind
 that correction; unchanged-runtime fuzz, performance, external-consumer, and
 graph results remain explicitly labeled as the `d22c2de` baseline.
+Independent review of evidence head `c510f4b` then found the same false general
+lower-bound class in `NewExporter` and seven historical changelog headings that
+contradicted their named commits' Git times. Exact source `63b7c8a` corrects the
+constructor contract, normalizes and orders the headings, and defines their
+author-time provenance. A retained focused audit checks both claims against
+source and Git history; full and coverage traces bind the exact correction.
 
 ## Remaining gate
 
