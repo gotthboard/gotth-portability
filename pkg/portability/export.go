@@ -80,10 +80,18 @@ func (e *Exporter) Checkpoint() Checkpoint {
 // reusable. Once preflight passes and record-frame I/O begins, any failure
 // poisons the exporter, even if cancellation prevents the first Writer callback;
 // recover from the prior checkpoint.
-// Complexity: time O(k+r+n)+R(n)+W(n), Omega(1), with tight
-// Theta(k+r+n)+R(n)+W(n) on success. The first non-empty record adds one retained
-// 32KiB buffer; empty and later successful records add only Theta(k+r) local
-// space. Variables k/r are metadata lengths and n is payload size.
+// Complexity: general record-path time O(k+r+n)+RB(n,E)+WA(k+r,n), Omega(1),
+// with tight Theta(k+r+n)+RB(n,E)+WA(k+r,n) on success; preflight rejection
+// can take tight Theta(1). RB is aggregate Body Reader cost for the declared n
+// bytes plus the required EOF probe, including at most E consecutive empty
+// reads. WA is aggregate archive Writer cost for the Theta(k+r) prefix, payload
+// chunks totaling n bytes, and fixed 32-byte digest; thus empty payloads still
+// write prefix and digest. Local auxiliary space is O(k+r+B), Omega(1), tight
+// Theta(k+r+B) on successful paths, where B is the fixed 32KiB working buffer
+// for a non-empty record and zero for an empty record; only the first non-empty
+// record allocates and retains B. Delegated Reader/Writer auxiliary space is
+// ARB(n,E)+AWA(k+r,n). Variables k/r are metadata byte lengths,
+// n is payload size, and E=MaxConsecutiveEmptyReads.
 func (e *Exporter) WriteRecord(ctx context.Context, record Record) (Checkpoint, error) {
 	if e == nil || e.done {
 		return Checkpoint{}, wrap(ErrFinalized, "write record", nil)
@@ -139,11 +147,14 @@ func (e *Exporter) WriteRecord(ctx context.Context, record Record) (Checkpoint, 
 }
 
 // copyPayload writes and hashes exactly size bytes, then requires source EOF.
-// Complexity: time O(n)+R(n)+W(n), Omega(1), tight Theta(n)+R(n)+W(n) on
-// success; the first non-empty record allocates one 32KiB reusable payload
-// buffer, while empty records allocate no payload buffer and later records
-// reuse retained storage. Hash, metadata, and error paths still allocate;
-// variable n is size and R/W are delegated I/O costs.
+// Complexity: general time O(n)+RB(n,E)+WP(n), Omega(1), with tight
+// Theta(n)+RB(n,E)+WP(n) on success. RB is aggregate Body Reader cost for n
+// declared bytes plus the required EOF probe; WP is aggregate archive Writer
+// cost for payload chunks totaling n bytes and is zero when n=0. Peak local
+// auxiliary space is O(B), Omega(1), tight Theta(B) for a non-empty payload and
+// Theta(1) for an empty payload, where B is the fixed 32KiB working buffer; only
+// the first non-empty record allocates and retains B. Delegated auxiliary space
+// is ARB(n,E)+AWP(n). Variable n is size and E=MaxConsecutiveEmptyReads.
 func (e *Exporter) copyPayload(ctx context.Context, src io.Reader, size uint64) ([32]byte, error) {
 	h := sha256.New()
 	var buf []byte

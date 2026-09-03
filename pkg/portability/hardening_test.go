@@ -330,6 +330,19 @@ func TestAbortReportsCleanupDeadline(t *testing.T) {
 	}
 }
 
+func TestAbortSkipsCallbackWhenCleanupDeadlineIsAlreadyExpired(t *testing.T) {
+	beginErr := errors.New("begin-sensitive")
+	primary := wrap(ErrSink, "begin record", beginErr)
+	for _, timeout := range []time.Duration{0, -time.Nanosecond} {
+		stage := &abortBehaviorStage{}
+		err := abortWithTimeout(context.Background(), stage, primary, timeout)
+		assertClassSet(t, err, ErrSink)
+		if stage.aborts != 0 || !containsExplicitCause(err, beginErr) || !containsExplicitCause(err, context.DeadlineExceeded) {
+			t.Fatalf("timeout=%s error=%v aborts=%d", timeout, err, stage.aborts)
+		}
+	}
+}
+
 func (s *cancelingStage) Write(p []byte) (int, error) { return len(p), nil }
 func (s *cancelingStage) Commit(context.Context) error {
 	s.commits++

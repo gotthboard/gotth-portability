@@ -8,6 +8,39 @@ uses the named commit's Git author time, rendered to the minute in CDT.
 
 ## Unreleased
 
+### 2026-09-03 15:30 CDT — Complete record-cost and Abort bracketing contracts
+
+Commit: current commit; hash assigned by Git after commit
+
+Affected files:
+
+- `docs/CHANGELOG.md`
+- `pkg/portability/export.go`
+- `pkg/portability/hardening_test.go`
+- `pkg/portability/import.go`
+
+Explanation:
+
+Describe complete aggregate Reader, Writer, and sink-callback costs for record
+metadata, payload, digest, EOF, and footer work, including local and delegated
+auxiliary space and valid-path qualifications. Check the fresh Abort cleanup
+context immediately before the consumer callback and fail closed without
+calling `RecordSink.Abort` when that context is already expired. Add a direct
+zero/negative-timeout regression proving zero Abort calls.
+
+Verification:
+
+- expected-red then green expired-cleanup test under race
+- focused Abort/cancellation race tests
+- full format, diff, vet, race, coverage, fuzz, and build gates
+
+Risks / non-goals:
+
+- The only runtime change is fail-closed suppression of an Abort callback when
+  its fresh cleanup context is already expired.
+- The V1 wire format and public API are unchanged. Workflow stays `in_progress`
+  and unreleased.
+
 ### 2026-09-03 14:59 CDT — Close resume-contract and provenance audit
 
 Implementation commit: `55ba1451cf80661f97c62cc3d41e38e2a0cc77e1`.

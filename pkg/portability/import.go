@@ -116,11 +116,19 @@ func (i *Importer) Checkpoint() Checkpoint {
 // reusable. Once preflight passes and frame I/O begins, any non-completion
 // failure poisons the importer, even if cancellation prevents the first Reader
 // callback; recover from the prior checkpoint.
-// Complexity: record time O(k+r+n)+R(n)+W(n)+S, Omega(1), with tight
-// Theta(k+r+n)+R(n)+W(n)+S on success. The first non-empty record adds one
-// retained 32KiB buffer; empty and later successful records add only Theta(k+r)
-// local space. Variables k/r are metadata lengths, n payload size, and S
-// callbacks.
+// Complexity: general record-frame time O(k+r+n)+RA(k+r,n,E)+WS(n)+S,
+// Omega(1), with tight Theta(k+r+n)+RA(k+r,n,E)+WS(n)+S on a successful
+// record; preflight rejection can take tight Theta(1). RA is aggregate archive
+// Reader cost for the frame byte, fixed metadata fields, k/r metadata bytes,
+// n payload bytes, and fixed 32-byte digest. WS is aggregate staged Writer cost
+// for n payload bytes. S is aggregate Sink.Begin and RecordSink.Commit cost on
+// success; failure paths may instead include RecordSink.Abort. Footer completion
+// has O(1)+RF(E) time as defined by readFooter. Local auxiliary space is
+// O(k+r+B), Omega(1), tight Theta(k+r+B) on a successful record, where B is the
+// fixed 32KiB working buffer for a non-empty record and zero for an empty one;
+// only the first non-empty record allocates and retains B. Delegated auxiliary
+// space is ARA(k+r,n,E)+AWS(n)+AS. Variables k/r are metadata byte lengths,
+// n is payload size, and E=MaxConsecutiveEmptyReads.
 func (i *Importer) Next(ctx context.Context, sink Sink) (Checkpoint, error) {
 	if i == nil || sink == nil {
 		return Checkpoint{}, wrap(ErrInvalid, "importer or sink", nil)
@@ -171,9 +179,15 @@ func (i *Importer) Manifest() (Manifest, error) {
 }
 
 // readRecord stages, hashes, verifies, and commits one record.
-// Complexity: time O(k+r+n)+R(n)+W(n)+S, Omega(1), with tight
-// Theta(k+r+n)+R(n)+W(n)+S on success. Allocation and retained-buffer costs
-// match Next; variables and delegated costs match Next.
+// Complexity: general time O(k+r+n)+RR(k+r,n,E)+WS(n)+S, Omega(1), with
+// tight Theta(k+r+n)+RR(k+r,n,E)+WS(n)+S on success. RR is aggregate archive
+// Reader cost for fixed metadata fields, k/r metadata bytes, n payload bytes,
+// and the fixed 32-byte digest; WS covers staged writes totaling n bytes; S
+// covers Sink.Begin and RecordSink.Commit on success, while failure paths may
+// include RecordSink.Abort. Local auxiliary space is O(k+r+B), Omega(1), tight
+// Theta(k+r+B) on success; delegated auxiliary space is
+// ARR(k+r,n,E)+AWS(n)+AS. B, k/r, n, E, allocation, and retention semantics
+// match Next.
 func (i *Importer) readRecord(ctx context.Context, sink Sink) (Checkpoint, error) {
 	meta, prefix, err := i.readRecordMeta(ctx)
 	if err != nil {
@@ -244,11 +258,15 @@ func (i *Importer) readRecord(ctx context.Context, sink Sink) (Checkpoint, error
 }
 
 // copyPayload transfers exactly size bytes to staged storage while hashing.
-// Complexity: time O(n)+R(n)+W(n), Omega(1), tight Theta(n)+R(n)+W(n) on
-// success; the first non-empty record allocates one 32KiB reusable payload
-// buffer, while empty records allocate no payload buffer and later records
-// reuse retained storage. Hash, metadata, and error paths still allocate;
-// variable n is size and R/W are delegated I/O costs.
+// Complexity: general time O(n)+RP(n,E)+WS(n), Omega(1), with tight
+// Theta(n)+RP(n,E)+WS(n) on success. RP is aggregate archive Reader cost for
+// exactly n payload bytes, including legal short/empty reads; WS is aggregate
+// staged Writer cost for chunks totaling n bytes and is zero when n=0. Peak
+// local auxiliary space is O(B), Omega(1), tight Theta(B) for a non-empty
+// payload and Theta(1) for an empty payload, where B is the fixed 32KiB working
+// buffer; only the first non-empty record allocates and retains B. Delegated
+// auxiliary space is ARP(n,E)+AWS(n). Variable n is size and
+// E=MaxConsecutiveEmptyReads.
 func (i *Importer) copyPayload(ctx context.Context, dst io.Writer, size uint64) ([32]byte, error) {
 	h := sha256.New()
 	var buf []byte
@@ -294,12 +312,18 @@ func (i *Importer) abort(ctx context.Context, stage RecordSink, primary error) e
 
 // abortWithTimeout is the bounded cleanup mechanism split out so deadline
 // behavior can be tested without making every test wait for AbortTimeout.
-// Complexity: local time O(1)+A and auxiliary space O(1), Omega(1), tight
-// Theta(1) outside delegated Abort cost A. The deadline bounds conforming Abort
-// implementations but cannot forcibly interrupt a callback that ignores ctx.
+// Complexity: general time O(1)+A, Omega(1); an already-expired cleanup context
+// takes tight Theta(1) and skips A, while the callback path has tight Theta(1)+A.
+// Local auxiliary space is O(1), Omega(1), tight Theta(1), plus delegated Abort
+// auxiliary space AA only when called. A/AA are the time/space cost of zero or
+// one Abort call. The deadline bounds conforming Abort implementations but
+// cannot forcibly interrupt a callback that ignores ctx.
 func abortWithTimeout(ctx context.Context, stage RecordSink, primary error, timeout time.Duration) error {
 	cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), timeout)
 	defer cancel()
+	if cleanupErr := cleanupCtx.Err(); cleanupErr != nil {
+		return errors.Join(primary, wrap(ErrSink, "abort record deadline", cleanupErr))
+	}
 	abortErr := stage.Abort(cleanupCtx)
 	if cleanupErr := cleanupCtx.Err(); cleanupErr != nil {
 		if abortErr != nil {
@@ -314,9 +338,12 @@ func abortWithTimeout(ctx context.Context, stage RecordSink, primary error, time
 }
 
 // readRecordMeta decodes bounded metadata and reconstructs its canonical bytes.
-// Complexity: time O(k+r)+R(k+r), Omega(1), tight Theta(k+r)+R(k+r) on
-// success; auxiliary space O(k+r), Omega(1), tight Theta(k+r); variables k/r
-// are metadata lengths and R is delegated reader cost.
+// Complexity: general time O(k+r)+RM(k+r,E), Omega(1), with tight
+// Theta(k+r)+RM(k+r,E) on success; local auxiliary space O(k+r), Omega(1),
+// tight Theta(k+r) on success, plus delegated Reader space ARM(k+r,E). RM is
+// aggregate archive Reader cost for fixed sequence/length/size fields and k/r
+// metadata bytes. Variables k/r are metadata byte lengths and
+// E=MaxConsecutiveEmptyReads.
 func (i *Importer) readRecordMeta(ctx context.Context) (RecordMeta, []byte, error) {
 	sequence, err := i.readUint64(ctx, "read record sequence")
 	if err != nil {
@@ -339,8 +366,11 @@ func (i *Importer) readRecordMeta(ctx context.Context) (RecordMeta, []byte, erro
 }
 
 // readFooter verifies counts, chain, and immediate EOF before marking complete.
-// Complexity: time O(1)+R(1), Omega(1), tight Theta(1)+R(1); auxiliary space
-// O(1), Omega(1), tight Theta(1); R is fixed-size delegated reader cost.
+// Complexity: general time O(1)+RF(E), Omega(1), with tight Theta(1)+RF(E) on
+// successful completion; local auxiliary space O(1), Omega(1), tight Theta(1),
+// plus delegated Reader space ARF(E). RF is aggregate archive Reader cost for
+// two fixed uint64 values, the fixed 32-byte chain, and the required EOF probe,
+// including at most E consecutive empty reads; E=MaxConsecutiveEmptyReads.
 func (i *Importer) readFooter(ctx context.Context) error {
 	records, err := i.readUint64(ctx, "read manifest records")
 	if err != nil {
@@ -413,9 +443,11 @@ func (i *Importer) readUint64(ctx context.Context, op string) (uint64, error) {
 }
 
 // readText reads one u16-length bounded UTF-8 string.
-// Complexity: time O(n)+R(n), Omega(1), tight Theta(n)+R(n) on success;
-// auxiliary space O(n), Omega(1), tight Theta(n); variable n is encoded text
-// length and R is delegated reader cost.
+// Complexity: general time O(n)+RT(n,E), Omega(1), with tight
+// Theta(n)+RT(n,E) on success; local auxiliary space O(n), Omega(1), tight
+// Theta(n) on non-empty success and Theta(1) for an empty allowed value, plus
+// delegated Reader space ART(n,E). RT is aggregate archive Reader cost for the
+// fixed two-byte length and n text bytes; E=MaxConsecutiveEmptyReads.
 func (i *Importer) readText(ctx context.Context, max int, allowEmpty bool, field string) (string, error) {
 	var length [2]byte
 	if err := i.readExact(ctx, length[:], "read "+field+" length"); err != nil {
