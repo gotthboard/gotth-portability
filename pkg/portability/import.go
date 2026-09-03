@@ -109,11 +109,16 @@ func (i *Importer) Checkpoint() Checkpoint {
 }
 
 // Next validates and commits one record or returns ErrComplete after validating
-// the manifest and required EOF. A non-completion failure poisons this importer.
-// Complexity: record time O(k+r+n)+R(n)+W(n)+S, Omega(k+r), tight
+// the manifest and required EOF. On a live importer, nil context/sink and
+// entry-cancellation preflight failures occur before frame input and leave it
+// reusable. Once preflight passes and frame I/O begins, any non-completion
+// failure poisons the importer, even if cancellation prevents the first Reader
+// callback; recover from the prior checkpoint.
+// Complexity: record time O(k+r+n)+R(n)+W(n)+S, Omega(1), with tight
 // Theta(k+r+n)+R(n)+W(n)+S on success. The first non-empty record adds one
-// retained 32KiB buffer; empty and later records add only Theta(k+r) local
-// space. Variables k/r are metadata lengths, n payload size, and S callbacks.
+// retained 32KiB buffer; empty and later successful records add only Theta(k+r)
+// local space. Variables k/r are metadata lengths, n payload size, and S
+// callbacks.
 func (i *Importer) Next(ctx context.Context, sink Sink) (Checkpoint, error) {
 	if i == nil || sink == nil {
 		return Checkpoint{}, wrap(ErrInvalid, "importer or sink", nil)
@@ -164,7 +169,7 @@ func (i *Importer) Manifest() (Manifest, error) {
 }
 
 // readRecord stages, hashes, verifies, and commits one record.
-// Complexity: time O(k+r+n)+R(n)+W(n)+S, Omega(k+r), tight
+// Complexity: time O(k+r+n)+R(n)+W(n)+S, Omega(1), with tight
 // Theta(k+r+n)+R(n)+W(n)+S on success. Allocation and retained-buffer costs
 // match Next; variables and delegated costs match Next.
 func (i *Importer) readRecord(ctx context.Context, sink Sink) (Checkpoint, error) {

@@ -71,6 +71,13 @@ Constructors and `Finalize` also take contexts. `Exporter.Checkpoint` and
 record, which is required for truncation/replay recovery. See the package documentation and
 `docs/implementation-spec.md` for the exact V1 wire contract.
 
+`WriteRecord` argument, validation, limit/offset, and entry-cancellation
+preflights happen before record output and leave the exporter reusable. `Next`
+nil context/sink and entry-cancellation preflights likewise consume no frame and
+leave a live importer reusable. After preflight passes and record/frame I/O
+begins, a failure poisons the object even if cancellation prevents the first
+callback; resume from its prior checkpoint instead of retrying it.
+
 ## Non-goals
 
 - A universal application schema or unrestricted database dump.

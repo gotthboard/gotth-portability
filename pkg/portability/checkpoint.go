@@ -104,8 +104,10 @@ func (c Checkpoint) validateStructure() error {
 }
 
 // MarshalBinary encodes a versioned, checksummed committed boundary.
-// Complexity: time O(a+s), Omega(a+s), tight Theta(a+s); auxiliary space
-// O(a+s), Omega(a+s), tight Theta(a+s); variables a/s are identifier lengths.
+// Complexity: time and auxiliary space O(a+s), Omega(1), with tight
+// Theta(a+s) for a valid checkpoint; constant-time structural rejection can
+// avoid inspecting or encoding the identifiers. Variables a/s are identifier
+// lengths.
 func (c Checkpoint) MarshalBinary() ([]byte, error) {
 	if err := c.validateStructure(); err != nil {
 		return nil, err

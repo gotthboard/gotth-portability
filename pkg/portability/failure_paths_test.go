@@ -146,6 +146,218 @@ func TestExporterArgumentAndIOFailures(t *testing.T) {
 	}
 }
 
+func TestExporterWriteRecordPreflightIsRetryableAndProgressFailurePoisons(t *testing.T) {
+	validEmpty := Record{Kind: "x", Body: strings.NewReader("")}
+	for _, tc := range []struct {
+		name    string
+		limits  Limits
+		prepare func(*testing.T, *Exporter)
+		reject  func(*Exporter) error
+		repair  func(*Exporter)
+		retry   Record
+		want    error
+	}{
+		{
+			name: "nil context",
+			reject: func(ex *Exporter) error {
+				_, err := ex.WriteRecord(nil, Record{Kind: "x", Body: strings.NewReader("")})
+				return err
+			},
+			retry: validEmpty,
+			want:  ErrInvalid,
+		},
+		{
+			name: "pre-canceled context",
+			reject: func(ex *Exporter) error {
+				ctx, cancel := context.WithCancel(context.Background())
+				cancel()
+				_, err := ex.WriteRecord(ctx, Record{Kind: "x", Body: strings.NewReader("")})
+				return err
+			},
+			retry: validEmpty,
+			want:  ErrIO,
+		},
+		{
+			name: "nil body",
+			reject: func(ex *Exporter) error {
+				_, err := ex.WriteRecord(context.Background(), Record{Kind: "x"})
+				return err
+			},
+			retry: validEmpty,
+			want:  ErrInvalid,
+		},
+		{
+			name: "invalid metadata",
+			reject: func(ex *Exporter) error {
+				_, err := ex.WriteRecord(context.Background(), Record{Body: strings.NewReader("")})
+				return err
+			},
+			retry: validEmpty,
+			want:  ErrInvalid,
+		},
+		{
+			name:   "record size limit",
+			limits: Limits{MaxRecordBytes: 1, MaxTotalBytes: 2},
+			reject: func(ex *Exporter) error {
+				_, err := ex.WriteRecord(context.Background(), Record{Kind: "x", Size: 2, Body: strings.NewReader("ab")})
+				return err
+			},
+			retry: validEmpty,
+			want:  ErrLimit,
+		},
+		{
+			name:   "total size limit",
+			limits: Limits{MaxRecordBytes: 2, MaxTotalBytes: 2},
+			prepare: func(t *testing.T, ex *Exporter) {
+				t.Helper()
+				if _, err := ex.WriteRecord(context.Background(), Record{Kind: "x", Size: 1, Body: strings.NewReader("a")}); err != nil {
+					t.Fatal(err)
+				}
+			},
+			reject: func(ex *Exporter) error {
+				_, err := ex.WriteRecord(context.Background(), Record{Kind: "x", Size: 2, Body: strings.NewReader("ab")})
+				return err
+			},
+			retry: Record{Kind: "x", Size: 1, Body: strings.NewReader("b")},
+			want:  ErrLimit,
+		},
+		{
+			name: "stream offset overflow",
+			prepare: func(_ *testing.T, ex *Exporter) {
+				ex.cp.offset = math.MaxUint64
+			},
+			reject: func(ex *Exporter) error {
+				_, err := ex.WriteRecord(context.Background(), Record{Kind: "x", Size: 1, Body: strings.NewReader("a")})
+				return err
+			},
+			repair: func(ex *Exporter) {
+				ex.cp.offset = uint64(len(encodeHeader(testHeader())))
+			},
+			retry: validEmpty,
+			want:  ErrLimit,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var out bytes.Buffer
+			ex, err := NewExporter(context.Background(), &out, testHeader(), tc.limits)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tc.prepare != nil {
+				tc.prepare(t, ex)
+			}
+			beforeBytes := out.Len()
+			beforeCheckpoint := ex.Checkpoint()
+			if err := tc.reject(ex); !errors.Is(err, tc.want) {
+				t.Fatalf("preflight = %v, want %v", err, tc.want)
+			}
+			if out.Len() != beforeBytes || ex.Checkpoint() != beforeCheckpoint {
+				t.Fatalf("preflight changed output/checkpoint: bytes=%d/%d checkpoint=%#v/%#v", out.Len(), beforeBytes, ex.Checkpoint(), beforeCheckpoint)
+			}
+			if tc.repair != nil {
+				tc.repair(ex)
+			}
+			if _, err := ex.WriteRecord(context.Background(), tc.retry); err != nil {
+				t.Fatalf("retry after preflight = %v", err)
+			}
+		})
+	}
+
+	var countOut bytes.Buffer
+	counted, err := NewExporter(context.Background(), &countOut, testHeader(), Limits{MaxRecords: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := counted.WriteRecord(context.Background(), validEmpty); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := counted.WriteRecord(context.Background(), Record{Kind: "x", Body: strings.NewReader("")}); !errors.Is(err, ErrLimit) {
+		t.Fatalf("record count preflight = %v, want ErrLimit", err)
+	}
+	if _, err := counted.Finalize(context.Background()); err != nil {
+		t.Fatalf("finalize after record count preflight = %v", err)
+	}
+
+	partial := &cutoffBuffer{remaining: len(encodeHeader(testHeader())) + 1}
+	ex, err := NewExporter(context.Background(), partial, testHeader(), Limits{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ex.WriteRecord(context.Background(), Record{Kind: "x", Size: 1, Body: strings.NewReader("a")}); !errors.Is(err, ErrIO) {
+		t.Fatalf("partial output = %v, want ErrIO", err)
+	}
+	if _, err := ex.WriteRecord(context.Background(), validEmpty); !errors.Is(err, ErrFinalized) {
+		t.Fatalf("write after partial output = %v, want ErrFinalized", err)
+	}
+}
+
+func TestImporterNextPreflightIsRetryableAndFrameProgressPoisons(t *testing.T) {
+	data := archiveBytes(t, Record{Kind: "x", Size: 1, Body: strings.NewReader("a")})
+	for _, tc := range []struct {
+		name   string
+		invoke func(*Importer) error
+		want   error
+	}{
+		{
+			name: "nil sink",
+			invoke: func(im *Importer) error {
+				_, err := im.Next(context.Background(), nil)
+				return err
+			},
+			want: ErrInvalid,
+		},
+		{
+			name: "nil context",
+			invoke: func(im *Importer) error {
+				_, err := im.Next(nil, &memorySink{})
+				return err
+			},
+			want: ErrInvalid,
+		},
+		{
+			name: "pre-canceled context",
+			invoke: func(im *Importer) error {
+				ctx, cancel := context.WithCancel(context.Background())
+				cancel()
+				_, err := im.Next(ctx, &memorySink{})
+				return err
+			},
+			want: ErrIO,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			input := &countingReader{r: bytes.NewReader(data)}
+			im, err := NewImporter(context.Background(), input, Limits{}, acceptExact)
+			if err != nil {
+				t.Fatal(err)
+			}
+			beforeCalls := input.calls
+			beforeCheckpoint := im.Checkpoint()
+			if err := tc.invoke(im); !errors.Is(err, tc.want) {
+				t.Fatalf("preflight = %v, want %v", err, tc.want)
+			}
+			if input.calls != beforeCalls || im.Checkpoint() != beforeCheckpoint {
+				t.Fatalf("preflight consumed input/changed checkpoint: calls=%d/%d checkpoint=%#v/%#v", input.calls, beforeCalls, im.Checkpoint(), beforeCheckpoint)
+			}
+			if _, err := im.Next(context.Background(), &memorySink{}); err != nil {
+				t.Fatalf("retry after preflight = %v", err)
+			}
+		})
+	}
+
+	truncated := data[:len(encodeHeader(testHeader()))+1]
+	im, err := NewImporter(context.Background(), bytes.NewReader(truncated), Limits{}, acceptExact)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := im.Next(context.Background(), &memorySink{}); !errors.Is(err, ErrTruncated) {
+		t.Fatalf("partial frame = %v, want ErrTruncated", err)
+	}
+	if _, err := im.Next(context.Background(), &memorySink{}); !errors.Is(err, ErrFinalized) {
+		t.Fatalf("next after partial frame = %v, want ErrFinalized", err)
+	}
+}
+
 func TestExporterRecordAndFooterWriterFailures(t *testing.T) {
 	t.Parallel()
 

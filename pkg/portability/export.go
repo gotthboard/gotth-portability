@@ -73,10 +73,14 @@ func (e *Exporter) Checkpoint() Checkpoint {
 }
 
 // WriteRecord streams one exact-length record and returns its committed
-// boundary. Any failure poisons this exporter; resume from the prior checkpoint.
-// Complexity: time O(k+r+n)+R(n)+W(n), Omega(k+r), tight
-// Theta(k+r+n)+R(n)+W(n) on success. The first non-empty record adds one
-// retained 32KiB buffer; empty and later records add only Theta(k+r) local
+// boundary. Argument, entry-cancellation, metadata, limit, and offset preflight
+// failures occur before record output and leave the exporter reusable. Once
+// preflight passes and record-frame I/O begins, any failure poisons the exporter,
+// even if cancellation prevents the first Writer callback; recover from the
+// prior checkpoint.
+// Complexity: time O(k+r+n)+R(n)+W(n), Omega(1), with tight
+// Theta(k+r+n)+R(n)+W(n) on success. The first non-empty record adds one retained
+// 32KiB buffer; empty and later successful records add only Theta(k+r) local
 // space. Variables k/r are metadata lengths and n is payload size.
 func (e *Exporter) WriteRecord(ctx context.Context, record Record) (Checkpoint, error) {
 	if e == nil || e.done {
