@@ -27,7 +27,8 @@ Archive ID and schema ID are at most 256 bytes, record kind 128 bytes, and key
 bound record count, individual payload bytes, and total payload bytes; zero
 selects documented defaults. Each exporter/importer lazily allocates one fixed
 32 KiB buffer for its first non-empty record and reuses it. Empty records do not
-allocate the payload buffer.
+allocate the payload buffer, but still incur measured metadata, hashing, and
+callback allocations.
 
 ## Public contracts
 
@@ -53,6 +54,9 @@ allocate the payload buffer.
   whose deadline is `AbortTimeout`. A commit error, or cancellation observed
   after a commit call, has unknown outcome and does not call `Abort` or advance
   the checkpoint.
+- `Sink.Begin` may return a non-nil stage with an error. The begin error remains
+  primary and the library runs bounded `Abort` on that stage. Cleanup context
+  expiry adds `ErrSink`, including when `Abort` returns nil after the deadline.
 - Checkpoints have a versioned binary encoding protected by SHA-256. Decoding
   rejects corruption, unknown versions, and structurally inconsistent state.
 
@@ -62,5 +66,7 @@ Public sentinels distinguish invalid arguments, malformed/truncated stream, I/O
 failure, incompatibility, limit overflow, integrity failure, sequence mismatch,
 sink failure, incomplete state, finalized state, and clean completion. Wrapped
 errors never include payload or callback text. `errors.Is` traverses only the
-library classification; callers may explicitly retrieve the underlying error
-through `Causer.Cause` without letting callback values spoof library sentinels.
+library classification; callers may explicitly retrieve the raw underlying
+error through `Causer.Cause` without letting callback values spoof library
+sentinels. Raw causes may contain sensitive application data and must be
+consumer-redacted before logging or display.

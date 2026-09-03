@@ -51,7 +51,7 @@ func TestHeaderAndRecordValidation(t *testing.T) {
 	}
 }
 
-func TestClassifiedErrorDoesNotExposeCauseText(t *testing.T) {
+func TestClassifiedErrorStringRedactsButCauseIsRaw(t *testing.T) {
 	t.Parallel()
 
 	secret := errors.New("payload-secret")
@@ -64,6 +64,9 @@ func TestClassifiedErrorDoesNotExposeCauseText(t *testing.T) {
 	}
 	var causer Causer
 	if !errors.As(err, &causer) || !errors.Is(causer.Cause(), secret) {
-		t.Fatalf("explicit cause unavailable: %v", err)
+		t.Fatalf("raw sensitive cause unavailable: %v", err)
+	}
+	if causer.Cause().Error() != "payload-secret" {
+		t.Fatalf("Cause must be documented as raw, got %q", causer.Cause())
 	}
 }

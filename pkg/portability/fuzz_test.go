@@ -3,9 +3,31 @@ package portability
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"errors"
 	"testing"
 )
+
+func expectedSingleRecordManifest(kind, key string, payload []byte) Manifest {
+	digest := sha256.Sum256(payload)
+	initial := sha256.Sum256(encodeHeader(testHeader()))
+	chain := nextChain(initial, encodeRecordPrefix(RecordMeta{Sequence: 0, Kind: kind, Key: key, Size: uint64(len(payload))}), digest)
+	return Manifest{Records: 1, PayloadBytes: uint64(len(payload)), Chain: chain}
+}
+
+func assertSingleCommittedRecord(t *testing.T, sink *memorySink, payload []byte) {
+	t.Helper()
+	if sink.commits != 1 || sink.aborts != 0 || len(sink.committed) != 1 {
+		t.Fatalf("commit state: commits=%d aborts=%d entries=%d", sink.commits, sink.aborts, len(sink.committed))
+	}
+	got, ok := sink.committed[0]
+	if !ok {
+		t.Fatal("record sequence 0 was not committed")
+	}
+	if !bytes.Equal([]byte(got), payload) {
+		t.Fatalf("payload mismatch: got=%x want=%x", []byte(got), payload)
+	}
+}
 
 func FuzzArchiveRoundTrip(f *testing.F) {
 	f.Add("kind", "key", []byte("payload"))
@@ -24,19 +46,20 @@ func FuzzArchiveRoundTrip(f *testing.F) {
 			t.Fatal(err)
 		}
 		sink := &memorySink{}
-		if _, err := im.Next(context.Background(), sink); err != nil {
+		checkpoint, err := im.Next(context.Background(), sink)
+		if err != nil {
 			t.Fatal(err)
 		}
-		if _, err := im.Next(context.Background(), sink); !errors.Is(err, ErrComplete) {
+		completeCheckpoint, err := im.Next(context.Background(), sink)
+		if !errors.Is(err, ErrComplete) {
 			t.Fatalf("finish: %v", err)
 		}
 		manifest, err := im.Manifest()
-		if err != nil || manifest.Records != 1 || manifest.PayloadBytes != uint64(len(payload)) {
+		expected := expectedSingleRecordManifest(kind, key, payload)
+		if err != nil || manifest != expected || checkpoint.records != 1 || checkpoint.payloadBytes != uint64(len(payload)) || completeCheckpoint != checkpoint {
 			t.Fatalf("manifest=%#v error=%v", manifest, err)
 		}
-		if !bytes.Equal([]byte(sink.committed[0]), payload) {
-			t.Fatal("payload mismatch")
-		}
+		assertSingleCommittedRecord(t, sink, payload)
 	})
 }
 
@@ -79,8 +102,13 @@ func FuzzArbitraryArchiveTerminatesWithinRecordLimit(f *testing.F) {
 				if manifestErr != nil {
 					t.Fatalf("complete without manifest: %v", manifestErr)
 				}
-				if manifest.Records != uint64(sink.commits) || manifest.Records != checkpoint.Records() || manifest.PayloadBytes != checkpoint.PayloadBytes() {
+				if manifest.Records != uint64(sink.commits) || manifest.Records != checkpoint.Records() || manifest.PayloadBytes != checkpoint.PayloadBytes() || manifest.Chain != checkpoint.chain || len(sink.committed) != sink.commits {
 					t.Fatalf("complete state mismatch: manifest=%#v checkpoint=%#v commits=%d", manifest, checkpoint, sink.commits)
+				}
+				for sequence := uint64(0); sequence < manifest.Records; sequence++ {
+					if _, ok := sink.committed[sequence]; !ok {
+						t.Fatalf("missing committed sequence %d", sequence)
+					}
 				}
 				return
 			}
@@ -144,20 +172,38 @@ func FuzzValidArchiveMutationOracle(f *testing.F) {
 				t.Fatal("valid archive did not complete")
 			}
 			manifest, manifestErr := im.Manifest()
-			if manifestErr != nil || manifest.Records != 1 || manifest.PayloadBytes != uint64(len(payload)) || !bytes.Equal([]byte(sink.committed[0]), payload) {
-				t.Fatalf("valid oracle mismatch: manifest=%#v error=%v committed=%q", manifest, manifestErr, sink.committed[0])
+			expected := expectedSingleRecordManifest("opaque", "", payload)
+			if manifestErr != nil || manifest != expected {
+				t.Fatalf("valid oracle mismatch: manifest=%#v expected=%#v error=%v", manifest, expected, manifestErr)
 			}
+			assertSingleCommittedRecord(t, sink, payload)
 		case 1:
-			if complete || sink.commits != 0 {
-				t.Fatalf("integrity mutation completed=%v commits=%d", complete, sink.commits)
+			if complete || sink.commits != 0 || sink.aborts != 1 || len(sink.committed) != 0 {
+				t.Fatalf("integrity mutation completed=%v commits=%d aborts=%d entries=%d", complete, sink.commits, sink.aborts, len(sink.committed))
+			}
+			if _, manifestErr := im.Manifest(); !errors.Is(manifestErr, ErrIncomplete) {
+				t.Fatalf("integrity mutation manifest=%v", manifestErr)
 			}
 		case 2:
 			if complete {
 				t.Fatal("truncated archive completed")
 			}
+			if sink.commits > 1 || len(sink.committed) != sink.commits {
+				t.Fatalf("truncation commit state: commits=%d entries=%d", sink.commits, len(sink.committed))
+			}
+			if sink.commits == 1 {
+				assertSingleCommittedRecord(t, sink, payload)
+			}
+			if _, manifestErr := im.Manifest(); !errors.Is(manifestErr, ErrIncomplete) {
+				t.Fatalf("truncation manifest=%v", manifestErr)
+			}
 		case 3:
-			if complete || sink.commits != 1 {
-				t.Fatalf("trailing-data archive completed=%v commits=%d", complete, sink.commits)
+			if complete {
+				t.Fatal("trailing-data archive completed")
+			}
+			assertSingleCommittedRecord(t, sink, payload)
+			if _, manifestErr := im.Manifest(); !errors.Is(manifestErr, ErrIncomplete) {
+				t.Fatalf("trailing-data manifest=%v", manifestErr)
 			}
 		}
 	})

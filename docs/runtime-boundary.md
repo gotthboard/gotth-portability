@@ -21,6 +21,8 @@
   forcibly interrupt a misbehaving callback. `Abort` receives a fresh
   cancellation-independent context with an `AbortTimeout` deadline, which a
   conforming sink must honor; the library cannot stop a sink that ignores it.
+  Once `Abort` returns, deadline expiry is reported as `ErrSink` even if its
+  direct return is nil.
 
 ## Limits and completeness
 

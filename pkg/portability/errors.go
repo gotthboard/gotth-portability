@@ -40,11 +40,13 @@ func (e *classifiedError) Error() string {
 // Omega(1), tight Theta(1).
 func (e *classifiedError) Unwrap() error { return e.class }
 
-// Cause returns the redacted underlying callback or I/O error explicitly.
+// Cause returns the raw underlying callback or I/O error explicitly. It may
+// contain sensitive consumer data and is not safe to log or display without
+// caller-controlled redaction.
 // Complexity: time and auxiliary space O(1), Omega(1), tight Theta(1).
 func (e *classifiedError) Cause() error { return e.cause }
 
-// wrap creates a redaction-safe classified error.
+// wrap creates a classified error whose Error string is redaction-safe.
 // Complexity: time O(1), Omega(1), tight Theta(1); auxiliary space O(1),
 // Omega(1), tight Theta(1), with one error allocation.
 func wrap(class error, op string, cause error) error {

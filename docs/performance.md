@@ -6,7 +6,9 @@ This revision corrects allocation shape; it makes no runtime speedup claim. The
 direct streaming mechanism performs one bounded-buffer pass over each payload
 on export and import and hashes each payload byte once per pass. Empty records
 do not allocate a payload buffer. The first non-empty record allocates one
-32 KiB buffer, which the exporter/importer retains and reuses.
+32 KiB buffer, which the exporter/importer retains and reuses. Empty records
+are not allocation-free: frame metadata, hash state, and callback machinery
+produce the measured per-record allocations below.
 
 There is no baseline/candidate runtime claim, so hotspot share `P`, hotspot
 speedup `S_hotspot`, and an Amdahl prediction are not applicable. The admission

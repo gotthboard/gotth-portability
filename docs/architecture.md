@@ -32,13 +32,18 @@ deadline, make `Commit` idempotent by archive identity and sequence, and treat
 a commit error or cancellation observed after `Commit` as potentially having
 taken effect. The library cannot resolve a consumer backend's unknown commit
 outcome and therefore neither aborts nor advances its checkpoint then.
+If `Begin` returns both a stage and an error, the begin error remains primary
+and the stage receives bounded `Abort`. An expired cleanup context is reported
+as an additional `ErrSink` failure even when `Abort` returns nil.
 
 ## Failure model
 
 Malformed, truncated, incompatible, over-limit, corrupt, out-of-sequence, and
 trailing input fails closed under stable sentinels. The library emits no logs
 and error text contains operation names, never payloads or callback text.
-Underlying causes are available only through `Causer`, not sentinel traversal,
-so a callback returning (for example) `ErrComplete` cannot forge completion. A
-successful record checkpoint is not proof that the archive is complete; only
-`Manifest` after a library-produced `ErrComplete` is the completeness oracle.
+Raw underlying causes are available only through `Causer`, not sentinel
+traversal, so a callback returning (for example) `ErrComplete` cannot forge
+completion. Those causes may contain sensitive consumer data and require
+consumer-controlled redaction before logging or display. A successful record
+checkpoint is not proof that the archive is complete; only `Manifest` after a
+library-produced `ErrComplete` is the completeness oracle.

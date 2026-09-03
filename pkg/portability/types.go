@@ -68,9 +68,12 @@ type Manifest struct {
 // error rejects the archive before any record sink is opened.
 type Compatibility func(context.Context, Header) error
 
-// Causer exposes a redacted callback or I/O cause without adding that cause to
-// errors.Is traversal. This prevents callback errors from spoofing a library
-// sentinel while preserving explicit diagnostics for callers that need them.
+// Causer exposes the raw callback or I/O cause without adding that cause to
+// errors.Is traversal. The returned error may contain payload fragments,
+// storage identifiers, secrets, or other sensitive consumer data. Callers must
+// apply their own redaction before logging or displaying it. This prevents raw
+// callback values from spoofing a library sentinel while preserving explicit,
+// opt-in diagnostics for trusted code.
 type Causer interface {
 	Cause() error
 }
@@ -83,7 +86,9 @@ type RecordSink interface {
 	Abort(context.Context) error
 }
 
-// Sink begins consumer-owned staging for one record.
+// Sink begins consumer-owned staging for one record. If Begin returns both a
+// non-nil RecordSink and a non-nil error, the library calls Abort on that stage
+// before returning the begin failure.
 type Sink interface {
 	Begin(context.Context, Header, RecordMeta) (RecordSink, error)
 }

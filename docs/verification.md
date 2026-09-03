@@ -16,14 +16,17 @@ Current worker verification:
   checkpoint golden tests.
 - Cancellation seam tests cover header/metadata/payload/digest/footer I/O,
   compatibility, begin, staged write, commit unknown-outcome, and bounded abort.
-  Pre-canceled construction performs no I/O.
+  Pre-canceled construction performs no I/O. Begin-with-stage-and-error cleanup,
+  abort failure, caller cancellation, and nil/error returns after cleanup
+  deadline are covered without losing the primary classification.
 - Strict I/O tests cover positive-short nil writes without retry, legal
   data-plus-error reads, negative/oversized Reader counts, transient empty reads,
   and the documented no-progress bound.
 - Every public sentinel is injected through export Reader/Writer,
   compatibility, begin, staged write, commit, and abort callbacks. Only the
   library classification participates in `errors.Is`; `Causer` retains explicit
-  access without leaking callback text.
+  access to the raw potentially sensitive cause while the library error string
+  remains redaction-safe.
 - Fresh five-second fuzz admissions passed 100,791 valid roundtrip inputs,
   90,176 arbitrary checkpoint inputs, 252,625 bounded arbitrary archive inputs,
   and 44,769 valid-archive mutation inputs. A simultaneous four-process fuzz

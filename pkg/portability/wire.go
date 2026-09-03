@@ -79,6 +79,9 @@ func writeExact(w io.Writer, p []byte) (int, error) {
 // writeExactContext brackets the single external Writer call with cancellation
 // checks. A cancellation observed after the call means its outcome may exist,
 // so callers must not advance a committed checkpoint.
+// Complexity: for n=len(p), time O(1)+W(n), Omega(1), tight Theta(1)+W(n),
+// with exactly one delegated Writer call; auxiliary space O(1), Omega(1),
+// tight Theta(1). A context cannot interrupt that call while it is in flight.
 func writeExactContext(ctx context.Context, w io.Writer, p []byte) (int, error) {
 	if err := ctx.Err(); err != nil {
 		return 0, err
@@ -92,6 +95,11 @@ func writeExactContext(ctx context.Context, w io.Writer, p []byte) (int, error) 
 
 // readExactContext fills p while validating every Reader result. Legal
 // transient (0, nil) results are bounded to prevent an infinite loop.
+// Complexity: for n=len(p) and E=MaxConsecutiveEmptyReads, at most n positive
+// progress calls and E empty calls between progress events give O(n*(E+1))
+// local/call overhead plus aggregate delegated reader cost R(n,E); for fixed E
+// this is tight Theta(n)+R(n,E) on success. Auxiliary space is O(1), Omega(1),
+// tight Theta(1). A context cannot interrupt any Reader call in flight.
 func readExactContext(ctx context.Context, r io.Reader, p []byte) (int, error) {
 	total := 0
 	emptyReads := 0
@@ -128,6 +136,10 @@ func readExactContext(ctx context.Context, r io.Reader, p []byte) (int, error) {
 // probeEOFContext requires EOF after tolerating bounded transient empty reads.
 // A positive count is returned to let callers classify trailing data and track
 // physical progress; Reader counts are validated before use.
+// Complexity: for E=MaxConsecutiveEmptyReads, time O(E)+R(E), Omega(1), tight
+// Theta(E)+R(E) when all tolerated empty reads occur; auxiliary space O(1),
+// Omega(1), tight Theta(1). At most E+1 Reader calls occur, and a context cannot
+// interrupt any one of them while it is in flight.
 func probeEOFContext(ctx context.Context, r io.Reader) (int, error) {
 	var one [1]byte
 	emptyReads := 0

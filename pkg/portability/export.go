@@ -133,8 +133,9 @@ func (e *Exporter) WriteRecord(ctx context.Context, record Record) (Checkpoint, 
 
 // copyPayload writes and hashes exactly size bytes, then requires source EOF.
 // Complexity: time O(n)+R(n)+W(n), Omega(1), tight Theta(n)+R(n)+W(n) on
-// success; the first non-empty record allocates one 32KiB reusable buffer,
-// while empty records allocate none and later records reuse retained storage;
+// success; the first non-empty record allocates one 32KiB reusable payload
+// buffer, while empty records allocate no payload buffer and later records
+// reuse retained storage. Hash, metadata, and error paths still allocate;
 // variable n is size and R/W are delegated I/O costs.
 func (e *Exporter) copyPayload(ctx context.Context, src io.Reader, size uint64) ([32]byte, error) {
 	h := sha256.New()

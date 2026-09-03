@@ -225,6 +225,93 @@ type cancelingStage struct {
 	abortDeadline time.Time
 }
 
+type abortBehaviorStage struct {
+	abortFn     func(context.Context) error
+	aborts      int
+	entryErr    error
+	deadlineSet bool
+}
+
+func (*abortBehaviorStage) Write(p []byte) (int, error)  { return len(p), nil }
+func (*abortBehaviorStage) Commit(context.Context) error { return nil }
+func (s *abortBehaviorStage) Abort(ctx context.Context) error {
+	s.aborts++
+	s.entryErr = ctx.Err()
+	_, s.deadlineSet = ctx.Deadline()
+	if s.abortFn != nil {
+		return s.abortFn(ctx)
+	}
+	return nil
+}
+
+func TestBeginStageAndErrorRunsBoundedAbort(t *testing.T) {
+	data := archiveBytes(t, Record{Kind: "x", Size: 1, Body: strings.NewReader("a")})
+	beginErr := errors.New("begin-sensitive")
+	abortErr := errors.New("abort-sensitive")
+
+	for _, tc := range []struct {
+		name           string
+		cancelBegin    bool
+		abortFn        func(context.Context) error
+		wantAbortCause error
+	}{
+		{name: "cleanup success"},
+		{name: "cleanup failure", abortFn: func(context.Context) error { return abortErr }, wantAbortCause: abortErr},
+		{name: "caller cancellation", cancelBegin: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			im, err := NewImporter(ctx, bytes.NewReader(data), Limits{}, acceptExact)
+			if err != nil {
+				t.Fatal(err)
+			}
+			stage := &abortBehaviorStage{abortFn: tc.abortFn}
+			_, err = im.Next(ctx, SinkFunc(func(context.Context, Header, RecordMeta) (RecordSink, error) {
+				if tc.cancelBegin {
+					cancel()
+				}
+				return stage, beginErr
+			}))
+			assertClassSet(t, err, ErrSink)
+			if stage.aborts != 1 || stage.entryErr != nil || !stage.deadlineSet {
+				t.Fatalf("aborts=%d entryErr=%v deadline=%v", stage.aborts, stage.entryErr, stage.deadlineSet)
+			}
+			if !containsExplicitCause(err, beginErr) {
+				t.Fatalf("primary begin cause lost: %v", err)
+			}
+			if tc.wantAbortCause != nil && !containsExplicitCause(err, tc.wantAbortCause) {
+				t.Fatalf("cleanup cause %v missing: %v", tc.wantAbortCause, err)
+			}
+		})
+	}
+}
+
+func TestAbortReportsCleanupDeadline(t *testing.T) {
+	beginErr := errors.New("begin-sensitive")
+	primary := wrap(ErrSink, "begin record", beginErr)
+	for _, tc := range []struct {
+		name    string
+		abortFn func(context.Context) error
+	}{
+		{name: "nil after deadline", abortFn: func(ctx context.Context) error { <-ctx.Done(); return nil }},
+		{name: "context error after deadline", abortFn: func(ctx context.Context) error { <-ctx.Done(); return ctx.Err() }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			stage := &abortBehaviorStage{abortFn: tc.abortFn}
+			started := time.Now()
+			err := abortWithTimeout(context.Background(), stage, primary, 10*time.Millisecond)
+			if elapsed := time.Since(started); elapsed > time.Second {
+				t.Fatalf("bounded cleanup took %s", elapsed)
+			}
+			assertClassSet(t, err, ErrSink)
+			if stage.aborts != 1 || !containsExplicitCause(err, beginErr) || !containsExplicitCause(err, context.DeadlineExceeded) {
+				t.Fatalf("error=%v aborts=%d", err, stage.aborts)
+			}
+		})
+	}
+}
+
 func (s *cancelingStage) Write(p []byte) (int, error) { return len(p), nil }
 func (s *cancelingStage) Commit(context.Context) error {
 	s.commits++

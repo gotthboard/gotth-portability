@@ -6,10 +6,43 @@ Released sections use Semantic Versioning; unreleased work remains under
 
 ## Unreleased
 
+### 2026-09-03 — Complete independent post-repair findings
+
+Implementation commit: current commit; hash assigned by Git after commit.
+Evidence: pending until the exact implementation commit exists.
+
+Affected files:
+
+- `pkg/portability/**`
+- `README.md`, architecture/spec/runtime/performance/verification documentation
+- workflow coverage and exact evidence records
+
+Explanation:
+
+Document `Causer.Cause` honestly as raw and potentially sensitive, abort a
+non-nil stage returned with a `Sink.Begin` error, report cleanup deadline expiry
+as `ErrSink` even after a nil Abort result, add required exact-I/O cost
+contracts, and strengthen empty/non-empty valid plus invalid mutation fuzz
+oracles. Replace silent proof logs with explicit command/exit traces after this
+implementation commit is fixed.
+
+Verification:
+
+- focused raw-cause, begin-cleanup, cleanup-deadline, and fuzz-oracle tests pass
+- full revision-matched gates and traced external proofs will be rerun against
+  the exact implementation commit before evidence is marked complete
+
+Risks / non-goals:
+
+- `Cause` remains an explicit raw diagnostic and must not be logged or displayed
+  without consumer-controlled redaction; `Error()` remains redaction-safe.
+- No downstream consumer schema or pin is fabricated. Workflow stays
+  `in_progress` and unreleased.
+
 ### 2026-09-03 — Harden cancellation, callback identity, I/O, and allocation
 
 Implementation commit: `5ec6f2f759078fa7fe894f99ff1c245a6c67e6f4`.
-Evidence commit: current commit; hash assigned by Git after commit.
+Evidence commit: `ca9de4dfa87334fc4dd9929649e48c783bd466c6`.
 
 Affected files:
 
@@ -32,8 +65,9 @@ Fuzz oracles now validate completion state and valid-archive mutations.
 Verification:
 
 - focused cancellation, callback-spoofing, I/O-contract, and allocation tests
-- full format, vet, build, race, coverage, fuzz, and benchmark gates pending on
-  the resulting exact source commit
+- full format, vet, build, race x50, 92.9% coverage, four fuzz targets, and the
+  export/import allocation matrix passed against exact source `5ec6f2f`; hashes
+  and commands are recorded in the feature evidence
 
 Risks / non-goals:
 
@@ -44,7 +78,7 @@ Risks / non-goals:
 
 ### 2026-09-03 14:20 CDT — Bind the external-consumer proof
 
-Commit: current commit; hash assigned by Git after commit
+Commit: `66feed0484b811ca57be090459ccfef7a392439f`
 
 Affected files:
 

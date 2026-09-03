@@ -7,6 +7,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"io"
+	"time"
 	"unicode/utf8"
 )
 
@@ -182,6 +183,13 @@ func (i *Importer) readRecord(ctx context.Context, sink Sink) (Checkpoint, error
 		return Checkpoint{}, wrap(ErrIO, "begin record", err)
 	}
 	stage, beginErr := sink.Begin(ctx, i.cp.header, meta)
+	if beginErr != nil {
+		primary := wrap(ErrSink, "begin record", beginErr)
+		if stage != nil {
+			return Checkpoint{}, i.abort(ctx, stage, primary)
+		}
+		return Checkpoint{}, primary
+	}
 	if err := ctx.Err(); err != nil {
 		primary := wrap(ErrIO, "begin record", err)
 		if stage != nil {
@@ -189,8 +197,8 @@ func (i *Importer) readRecord(ctx context.Context, sink Sink) (Checkpoint, error
 		}
 		return Checkpoint{}, primary
 	}
-	if beginErr != nil || stage == nil {
-		return Checkpoint{}, wrap(ErrSink, "begin record", beginErr)
+	if stage == nil {
+		return Checkpoint{}, wrap(ErrSink, "begin record", nil)
 	}
 	digest, err := i.copyPayload(ctx, stage, meta.Size)
 	if err != nil {
@@ -223,8 +231,9 @@ func (i *Importer) readRecord(ctx context.Context, sink Sink) (Checkpoint, error
 
 // copyPayload transfers exactly size bytes to staged storage while hashing.
 // Complexity: time O(n)+R(n)+W(n), Omega(1), tight Theta(n)+R(n)+W(n) on
-// success; the first non-empty record allocates one 32KiB reusable buffer,
-// while empty records allocate none and later records reuse retained storage;
+// success; the first non-empty record allocates one 32KiB reusable payload
+// buffer, while empty records allocate no payload buffer and later records
+// reuse retained storage. Hash, metadata, and error paths still allocate;
 // variable n is size and R/W are delegated I/O costs.
 func (i *Importer) copyPayload(ctx context.Context, dst io.Writer, size uint64) ([32]byte, error) {
 	h := sha256.New()
@@ -266,10 +275,26 @@ func (i *Importer) copyPayload(ctx context.Context, dst io.Writer, size uint64) 
 // Complexity: delegated time/space equal Abort; local time and auxiliary space
 // O(1), Omega(1), tight Theta(1), excluding error allocation.
 func (i *Importer) abort(ctx context.Context, stage RecordSink, primary error) error {
-	cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), AbortTimeout)
+	return abortWithTimeout(ctx, stage, primary, AbortTimeout)
+}
+
+// abortWithTimeout is the bounded cleanup mechanism split out so deadline
+// behavior can be tested without making every test wait for AbortTimeout.
+// Complexity: local time O(1)+A and auxiliary space O(1), Omega(1), tight
+// Theta(1) outside delegated Abort cost A. The deadline bounds conforming Abort
+// implementations but cannot forcibly interrupt a callback that ignores ctx.
+func abortWithTimeout(ctx context.Context, stage RecordSink, primary error, timeout time.Duration) error {
+	cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), timeout)
 	defer cancel()
-	if err := stage.Abort(cleanupCtx); err != nil {
-		return errors.Join(primary, wrap(ErrSink, "abort record", err))
+	abortErr := stage.Abort(cleanupCtx)
+	if cleanupErr := cleanupCtx.Err(); cleanupErr != nil {
+		if abortErr != nil {
+			return errors.Join(primary, wrap(ErrSink, "abort record deadline", errors.Join(cleanupErr, abortErr)))
+		}
+		return errors.Join(primary, wrap(ErrSink, "abort record deadline", cleanupErr))
+	}
+	if abortErr != nil {
+		return errors.Join(primary, wrap(ErrSink, "abort record", abortErr))
 	}
 	return primary
 }

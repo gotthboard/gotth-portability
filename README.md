@@ -23,6 +23,9 @@ application.
 - The entire archive is never buffered. The first non-empty payload lazily
   allocates one fixed 32 KiB buffer per exporter/importer and later records
   reuse it; empty records allocate no payload buffer.
+- Empty records still incur measured frame metadata, hash-state, and callback
+  allocations; the performance report quantifies them instead of calling them
+  allocation-free.
 - Metadata, record count, individual payload size, and cumulative payload size
   are bounded before consumer staging.
 - Imported data is staged through a consumer sink and committed only after the
@@ -34,7 +37,8 @@ application.
 - Stable sentinels classify failures. Library-generated error strings never
   include payload bytes or consumer error text, callback causes cannot spoof a
   sentinel through `errors.Is`, and the library emits no logs. Callers that
-  need a redacted underlying cause can explicitly use the `Causer` interface.
+  need the raw underlying cause can explicitly use `Causer`. That cause is
+  potentially sensitive and must be consumer-redacted before logging or display.
 
 ## Deliberate limits
 
@@ -48,6 +52,8 @@ application.
 - Cancellation is checked before and after every caller-owned I/O or callback.
   A canceled commit is also an unknown outcome. Best-effort `Abort` receives a
   fresh context bounded by `AbortTimeout`; sink implementations must honor it.
+  If `Begin` returns both a stage and an error, that stage is aborted. Cleanup
+  deadline expiry is reported as `ErrSink` even if `Abort` returns nil.
 - Record commit is atomic only to the degree supplied by the consumer sink.
   There is no multi-record transaction or exactly-once external effect.
 - The package does not compress, encrypt, store, transmit, authorize, redact,
