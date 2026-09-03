@@ -6,9 +6,9 @@ Released sections use Semantic Versioning; unreleased work remains under
 
 ## Unreleased
 
-### 2026-09-03 13:59 CDT — Specify retry and poisoning boundaries
+### 2026-09-03 14:06 CDT — Specify retry and poisoning boundaries
 
-Implementation commit: `8d7836c09cf5e35c5088065c0a3906ae1ddb3e2e`.
+Implementation commit: `fa12f158ed4c0cf97a95d2cc67da5a0a1a986d40`.
 Evidence commit: this documentation-only commit. The heading uses the verified
 implementation commit author time.
 
@@ -30,7 +30,7 @@ Verification:
 
 - focused retry/poison boundary tests pass under race three consecutive times
 - full format/diff/vet/race/coverage/build passes at 93.6% statement coverage
-- fresh traces bind both gates to exact implementation `8d7836c`
+- fresh traces bind both gates to exact implementation `fa12f15`
 
 Risks / non-goals:
 

@@ -14,6 +14,8 @@
   `d22c2de207a3a6b046b7ed96aa72d7640ca616f0`.
 - Retry-boundary and cost-contract correction commit:
   `8d7836c09cf5e35c5088065c0a3906ae1ddb3e2e`.
+- Final live-exporter contract qualification:
+  `fa12f158ed4c0cf97a95d2cc67da5a0a1a986d40`.
 - Branch/worktree: `feature/v1-portability` at
   `/tmp/gotth-portability-worktrees/v1-portability`.
 - No push, PR, tag, release, deployment, live database, secret, or remote state
@@ -55,7 +57,7 @@ go vet -mod=readonly ./...
 go build -mod=readonly ./...
 go test -mod=readonly -race -count=3 ./pkg/portability -run 'TestExporterWriteRecordPreflightIsRetryableAndProgressFailurePoisons|TestImporterNextPreflightIsRetryableAndFrameProgressPoisons'
 make verify
-go test -mod=readonly -race -coverprofile=/tmp/gotth-portability-coverage-8d7836c.out ./...
+go test -mod=readonly -race -coverprofile=/tmp/gotth-portability-coverage-fa12f15.out ./...
 ```
 
 Hardened source coverage is 93.6% under race. Boundary, negative, staged sink,
@@ -141,16 +143,16 @@ remains redaction-safe.
 
 | Current-source retained artifact | SHA-256 |
 | --- | --- |
-| `/tmp/gotth-portability-focused-8d7836c.log` | `c0b655e94b254113c9319518a8590330ad6e648b311be415c32b02eb127e4fec` |
-| `/tmp/gotth-portability-focused-8d7836c.raw.log` | `7b15f3128b35e74e756d388a72966755548df3baa5cfdfff7f0a88832a9b55aa` |
-| `/tmp/gotth-portability-verify-8d7836c.log` | `333a98efdf948dbb42472c5a2488c524871171a238f35d9c66ef5636d2fd1cf0` |
-| `/tmp/gotth-portability-verify-8d7836c.raw.log` | `00f07a4e6e0deed70a4f75444b225341e4e798262a485303e3ace64502877e3d` |
-| `/tmp/gotth-portability-coverage-8d7836c.log` | `4a682bfb630ec4ae89cc2dca85be1270d13d0993deecbd42895752f67e5a5566` |
-| `/tmp/gotth-portability-coverage-8d7836c.raw.log` | `6c42efe74db4da66c62415f64b472c96a069bf5bf90eb230a857119154d8ad46` |
-| `/tmp/gotth-portability-coverage-8d7836c.out` | `f73459c37e7b6fd76beaec9b299bfb47427d808f622dd42479fdb22f029f2085` |
+| `/tmp/gotth-portability-focused-fa12f15.log` | `f004b1d9b549904898bc5ed9cb9a521d51b35a4befd46e6df262b80806e3b025` |
+| `/tmp/gotth-portability-focused-fa12f15.raw.log` | `12a33b37f9567fe298eaca91cd3ae5bd53ecb87bd5a15ca2b269a4e7bf19ba82` |
+| `/tmp/gotth-portability-verify-fa12f15.log` | `5ca68285179f7652a03bd462acbff64d010ca5e92bdf86e7fb88060f2919c653` |
+| `/tmp/gotth-portability-verify-fa12f15.raw.log` | `00f07a4e6e0deed70a4f75444b225341e4e798262a485303e3ace64502877e3d` |
+| `/tmp/gotth-portability-coverage-fa12f15.log` | `df1c1f439496ab08acc74cc39569add669cd38dbdfc515e4af9d2365e54bbf74` |
+| `/tmp/gotth-portability-coverage-fa12f15.raw.log` | `8f2598a13a771c58aa6c71121071da82342e25b64114e6dcd2260d2ba38d95f7` |
+| `/tmp/gotth-portability-coverage-fa12f15.out` | `f73459c37e7b6fd76beaec9b299bfb47427d808f622dd42479fdb22f029f2085` |
 
 The following artifacts bind runtime baseline `d22c2de`. They remain relevant
-because `8d7836c` changes comments and tests only; they are not represented as
+because `fa12f15` changes comments and tests only; they are not represented as
 current-source executions.
 
 | Unchanged-runtime baseline artifact | SHA-256 |
@@ -228,7 +230,7 @@ and missing changelog times. Implementation `d22c2de` corrects the callback and
 complexity findings. The provenance-bound traces and this documentation-only
 evidence commit correct the evidence and chronology findings.
 Independent review of evidence head `d2bd5ea` then rejected an overbroad
-poisoning claim and invalid general lower bounds. Exact source `8d7836c`
+poisoning claim and invalid general lower bounds. Exact source `fa12f15`
 documents the actual retry/progress boundary, corrects the bounds, and adds
 direct state-transition tests. Fresh focused, full, and coverage traces bind
 that correction; unchanged-runtime fuzz, performance, external-consumer, and

@@ -3,7 +3,7 @@
 Current worker verification:
 
 - Go 1.26.6 format, diff check, vet, build, race, and coverage pass locally.
-- Hardened source `8d7836c09cf5e35c5088065c0a3906ae1ddb3e2e` reports
+- Hardened source `fa12f158ed4c0cf97a95d2cc67da5a0a1a986d40` reports
   93.6% race-instrumented statement coverage. Residual statements are
   defensive malformed-checkpoint/header, impossible count-overflow, and rare
   delegated-I/O branches; every public operation, sentinel family, record state
@@ -65,7 +65,7 @@ callback-identity, I/O-contract, retry/poisoning contract, cost-bound, wire,
 allocation, fuzz-oracle, and evidence corrections. Focused and full gates are
 revision-matched to the current source. Performance, clean-clone,
 external-consumer, graph, and fuzz evidence remain the `d22c2de` runtime
-baseline; `8d7836c` changes comments and tests, not runtime behavior. A real
+baseline; `fa12f15` changes comments and tests, not runtime behavior. A real
 downstream consumer schema/pin does not yet exist; workflow therefore remains
 `in_progress` and unreleased. Independent final admission remains
 orchestrator-owned.
