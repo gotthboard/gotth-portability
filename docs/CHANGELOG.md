@@ -3,6 +3,8 @@
 This repository records user-visible and compatibility-relevant changes here.
 Released sections use Semantic Versioning; unreleased work remains under
 `Unreleased` and does not imply a tag.
+Unless an entry explicitly identifies different event provenance, its heading
+uses the named commit's Git author time, rendered to the minute in CDT.
 
 ## Unreleased
 
@@ -148,7 +150,7 @@ Risks / non-goals:
 - No consumer schema or downstream integration was invented. Workflow remains
   `in_progress`, and no release or admission is claimed.
 
-### 2026-09-03 14:20 CDT — Bind the external-consumer proof
+### 2026-09-03 11:38 CDT — Bind the external-consumer proof
 
 Commit: `66feed0484b811ca57be090459ccfef7a392439f`
 
@@ -172,7 +174,7 @@ Risks / non-goals:
 
 - Evidence-only; implementation and workflow state remain unchanged.
 
-### 2026-09-03 14:05 CDT — Close evidence reproducibility gaps
+### 2026-09-03 11:36 CDT — Close evidence reproducibility gaps
 
 Commit: `a6d120f95f9cd8e359731f79584773575c1a2da5`
 
@@ -196,7 +198,7 @@ Risks / non-goals:
 
 - No implementation, API, wire, workflow state, or release claim changes.
 
-### 2026-09-03 13:25 CDT — Finalize revision-matched worker evidence
+### 2026-09-03 11:31 CDT — Finalize revision-matched worker evidence
 
 Commit: `72a5c318cb58c4d2b6d787cc0c66eb753e51d31e`
 
@@ -222,7 +224,7 @@ Risks / non-goals:
 - This is evidence-only and changes no implementation or compatibility surface.
 - No push, PR, tag, release, or independent admission is claimed.
 
-### 2026-09-03 12:40 CDT — Record worker verification evidence
+### 2026-09-03 11:25 CDT — Record worker verification evidence
 
 Commit: `5a291d9752839333ba033005b21c80686836b9e3`
 
@@ -255,7 +257,7 @@ Risks / non-goals:
   consumer SLO.
 - This evidence does not tag, release, push, or independently admit the API.
 
-### 2026-09-03 12:10 CDT — Implement bounded resumable portability streams
+### 2026-09-03 11:04 CDT — Implement bounded resumable portability streams
 
 Commit: `a4b39e8d20caa140d9d5dd10fdd0e5a41ad0eff4`
 
@@ -289,7 +291,7 @@ Risks / non-goals:
 - Consumer policy, persistence, idempotency, storage positioning, encryption,
   compression, and transport remain outside the library.
 
-### 2026-09-03 10:45 CDT — Define the portable streaming contract
+### 2026-09-03 10:49 CDT — Define the portable streaming contract
 
 Commit: `d827d1b76c7f3f6c0a3ddc965a15bfadb0fddbed`
 
@@ -318,7 +320,7 @@ Risks / non-goals:
 - No implementation or release is claimed by this contract commit.
 - Application schemas and product policy remain consumer-owned.
 
-### 2026-09-03 00:42 CDT — Establish GitHub public distribution
+### 2026-09-03 01:07 CDT — Establish GitHub public distribution
 
 Commit: `64ac2f3f52f05644c1e8584b3a9044d5dda1cdd1`
 

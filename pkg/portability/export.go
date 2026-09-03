@@ -18,9 +18,10 @@ type Exporter struct {
 }
 
 // NewExporter validates the contract and writes exactly one archive header.
-// Complexity: time O(a+s)+W(a+s), Omega(a+s), tight Theta(a+s)+W(a+s) for a
-// successful writer; auxiliary space O(a+s), Omega(a+s), tight Theta(a+s);
-// variables: a and s are identifier lengths; W is delegated writer cost.
+// Complexity: time O(a+s)+W(a+s), Omega(1), with tight
+// Theta(a+s)+W(a+s) on a valid successful path; auxiliary space O(a+s),
+// Omega(1), with tight Theta(a+s) on a valid successful path. Variables a/s
+// are identifier lengths; W is delegated writer cost.
 func NewExporter(ctx context.Context, w io.Writer, header Header, limits Limits) (*Exporter, error) {
 	if ctx == nil || w == nil {
 		return nil, wrap(ErrInvalid, "context or writer", nil)
