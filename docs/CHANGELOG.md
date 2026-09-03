@@ -8,17 +8,22 @@ uses the named commit's Git author time, rendered to the minute in CDT.
 
 ## Unreleased
 
-### 2026-09-03 14:58 CDT — Close resume-contract and provenance audit
+### 2026-09-03 14:59 CDT — Close resume-contract and provenance audit
 
-Commit: current commit; hash assigned by Git after commit
+Implementation commit: `55ba1451cf80661f97c62cc3d41e38e2a0cc77e1`.
+Evidence commit: this documentation-only commit. The heading uses the verified
+implementation commit author time.
 
 Affected files:
 
 - `docs/CHANGELOG.md`
+- `docs/verification.md`
 - `pkg/portability/export.go`
 - `pkg/portability/import.go`
 - `pkg/portability/import_test.go`
 - `pkg/portability/wire.go`
+- `workflow/COVERAGE.md`
+- `workflow/features/portable-v1/evidence/verification.md`
 
 Explanation:
 

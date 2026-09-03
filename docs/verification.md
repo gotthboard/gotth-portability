@@ -3,11 +3,14 @@
 Current worker verification:
 
 - Go 1.26.6 format, diff check, vet, build, race, and coverage pass locally.
-- Hardened source `63b7c8af4450e577d8f834d7592fcea0b32d6a3d` reports
-  93.6% race-instrumented statement coverage. Residual statements are
-  defensive malformed-checkpoint/header, impossible count-overflow, and rare
-  delegated-I/O branches; every public operation, sentinel family, record state
-  boundary, checksum/finalization path, and resume path has direct tests.
+- Hardened source `55ba1451cf80661f97c62cc3d41e38e2a0cc77e1` reports
+  94.7% race-instrumented statement coverage. `ResumeImporter` is 100%
+  statement-covered with direct argument, limit/checkpoint-order,
+  pre/post-compatibility cancellation, incompatible-cause redaction, no-reader-
+  I/O, and exact-restoration tests. Residual statements are the named
+  defensive malformed-state, impossible-overflow, nil-receiver, and rare
+  delegated-I/O variants visible in the retained function report; they are not
+  characterized as resume or compatibility gaps.
 - Metadata and configured payload limits cover limit-1, limit, limit+1, and
   materially-beyond cases. Every byte truncation of a representative archive
   fails without producing a manifest.
@@ -27,10 +30,12 @@ Current worker verification:
 - Direct state-boundary tests prove that every documented `WriteRecord` and
   `Next` preflight failure consumes no record/frame I/O and permits retry, while
   failure after partial output/input poisons the object.
-- Complexity contracts account for constant-time constructor rejection and
-  checkpoint validation's temporary canonical header allocation. `NewExporter`
-  and `ParseCheckpoint` distinguish constant-time rejection from their tight
-  valid successful/input paths.
+- Complexity contracts account for constant-time rejection, skipped delegated
+  calls, aggregate bounded exact-read cost, and checkpoint validation's
+  temporary canonical header allocation. `NewExporter`, `ResumeExporter`,
+  `ResumeImporter`, `Finalize`, `writeExactContext`, `readUint64`, and
+  `ParseCheckpoint` distinguish rejection paths from delegated or tight valid
+  paths.
 - Every public sentinel is injected through export Reader/Writer,
   compatibility, begin, staged write, commit, and abort callbacks. Only the
   library classification participates in `errors.Is`; `Causer` retains explicit
@@ -63,10 +68,11 @@ Current worker verification:
 
 Worker and independent cold reviews drove checkpoint, recovery, cancellation,
 callback-identity, I/O-contract, retry/poisoning contract, cost-bound, wire,
-allocation, fuzz-oracle, and evidence corrections. Focused and full gates are
-revision-matched to the current source. Performance, clean-clone,
-external-consumer, graph, and fuzz evidence remain the `d22c2de` runtime
-baseline; `63b7c8a` changes comments, documentation, and tests, not runtime
-behavior. A real downstream consumer schema/pin does not yet exist; workflow
-therefore remains `in_progress` and unreleased. Independent final admission
-remains orchestrator-owned.
+allocation, fuzz-oracle, and evidence corrections. Performance,
+external-consumer, and graph evidence remain the `d22c2de` runtime baseline.
+Fresh verify, 94.7% race coverage, focused race x3, four sequential three-second
+fuzz probes, exact changelog provenance, and clean-clone evidence bind source
+`55ba145`; that commit changes comments, documentation, and tests, not
+executable runtime behavior. A real downstream consumer schema/pin does not yet
+exist; workflow therefore remains `in_progress` and unreleased. Independent
+final admission remains orchestrator-owned.

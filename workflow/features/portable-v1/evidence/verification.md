@@ -18,6 +18,8 @@
   `fa12f158ed4c0cf97a95d2cc67da5a0a1a986d40`.
 - Constructor-cost and changelog-provenance correction:
   `63b7c8af4450e577d8f834d7592fcea0b32d6a3d`.
+- Resume-contract, focused-coverage, and exact-file-provenance correction:
+  `55ba1451cf80661f97c62cc3d41e38e2a0cc77e1`.
 - Branch/worktree: `feature/v1-portability` at
   `/tmp/gotth-portability-worktrees/v1-portability`.
 - No push, PR, tag, release, deployment, live database, secret, or remote state
@@ -57,12 +59,12 @@ Passed locally:
 git diff --check -- .
 go vet -mod=readonly ./...
 go build -mod=readonly ./...
-bash /tmp/gotth-portability-contract-check-63b7c8a.sh
+bash /tmp/gotth-portability-changelog-audit.sh /tmp/gotth-portability-worktrees/v1-portability
 make verify
-go test -mod=readonly -race -count=1 -coverprofile=/tmp/gotth-portability-coverage-63b7c8a.out ./...
+go test -mod=readonly -race -count=1 -coverprofile=/tmp/gotth-portability-coverage-55ba145.out ./...
 ```
 
-Hardened source coverage is 93.6% under race. Boundary, negative, staged sink,
+Hardened source coverage is 94.7% under race. Boundary, negative, staged sink,
 every-byte truncation, literal empty/non-empty archive and checkpoint goldens,
 resume, external-package, and bounded-write tests pass. New tests bracket every
 caller-owned cancellation seam, enforce a finite no-progress bound and strict
@@ -75,10 +77,21 @@ stages, cancellation after the callback, and Abort success/failure.
 Simultaneous begin failure and cancellation retain `ErrSink`, `ErrIO`, and both
 raw causes. Both nil/error returns after a cleanup deadline have direct tests.
 Exact-valid fuzz seeds require the commit entry even for empty payload.
-Residual lines are defensive variants within already-covered classifications.
-The focused contract audit also proves `NewExporter`'s general `Omega(1)` bound
-and compares every heading present at implementation commit `63b7c8a` to the
-named Git commit's author minute while enforcing descending document order.
+`ResumeImporter` is 100% statement-covered: its argument and limit/checkpoint
+ordering, entry and post-compatibility cancellation, incompatible raw-cause
+redaction/classification, zero Reader I/O, and exact restoration are direct
+tests. Residual lines are the defensive malformed-state, impossible-overflow,
+nil-receiver, and rare delegated-I/O variants visible in the retained function
+report; they are not hidden resume or compatibility gaps. The exact changelog
+audit runs `git show --name-only --format=fuller` for every named commit and
+compares the recorded affected-file list with the exact unique commit union.
+
+Fresh exact-source fuzz probes ran sequentially for three seconds each:
+
+- archive roundtrip: 136,681 executions;
+- checkpoint parser: 137,108 executions;
+- bounded arbitrary archive: 170,951 executions;
+- valid-archive mutation oracle: 34,895 executions.
 
 The runtime implementation is unchanged from `d22c2de`; its retained fresh
 five-second fuzz runs were:
@@ -146,7 +159,35 @@ provides explicit access to the unchanged raw cause, which may be sensitive and
 must be consumer-redacted before logging or display; public `Error()` text
 remains redaction-safe.
 
-| Current-source retained artifact | SHA-256 |
+| Exact source `55ba145` retained artifact | SHA-256 |
+| --- | --- |
+| `/tmp/gotth-portability-verify-55ba145.log` | `8804f737678f19e0c11c4c92f6a5634593ee9c0c55a14a9b742a88190bc09955` |
+| `/tmp/gotth-portability-verify-55ba145.raw.log` | `17654113acdc9fbc2a6b659b8a2ca63f89a27ed2e12f62a03754df1856a102f4` |
+| `/tmp/gotth-portability-coverage-55ba145.log` | `495c3332d2c04156126948505331b74b2f6d3a9f87460bcfe19ebeeeec1c102d` |
+| `/tmp/gotth-portability-coverage-55ba145.raw.log` | `e371950355e510d53310c23e41a555417ec27479640f91f82076b8d62fd99062` |
+| `/tmp/gotth-portability-coverage-55ba145.out` | `ee5b4b8ccc998042050b1d2a43a6eb1201e55570bb37c7046e2f9b64a7c4d4b7` |
+| `/tmp/gotth-portability-coverage-functions-55ba145.log` | `a23b9dcd1e3776dcc17a19dc9230534b5527d76c70dd560b0040955b9b2c4bc4` |
+| `/tmp/gotth-portability-coverage-functions-55ba145.raw.log` | `679548d6defb6fc7ed4694f8ded58acc65e4dd195ec645653673da52a9349032` |
+| `/tmp/gotth-portability-focused-race-1-55ba145.log` | `23544ab801af28bc23dcc62d5bc865bca6a91c1243c0ad37cc6458c69930f5ef` |
+| `/tmp/gotth-portability-focused-race-1-55ba145.raw.log` | `6b8e8c43225fbe614b5ca8e7ea21fef17c1666a0ffdf86cd0680cbfd726093bc` |
+| `/tmp/gotth-portability-focused-race-2-55ba145.log` | `4357fcdbe73c6f74d6f767ccf45c49bb9ccf19043a716ff4a848f70a8f5e9ccc` |
+| `/tmp/gotth-portability-focused-race-2-55ba145.raw.log` | `ba8f02d937482fbc3ec48c49e60f876ba7165e17148ffc3eb1e559106a34994e` |
+| `/tmp/gotth-portability-focused-race-3-55ba145.log` | `458631de199686f5df58b2bd190c3fdd070cd4e061f9f9d68ff4e46118f5fbd9` |
+| `/tmp/gotth-portability-focused-race-3-55ba145.raw.log` | `ba8f02d937482fbc3ec48c49e60f876ba7165e17148ffc3eb1e559106a34994e` |
+| `/tmp/gotth-portability-fuzz-roundtrip-55ba145.log` | `2777f3e692cdc9437008e562e401e3f01ddd1176b035db62d57c36b0a0d5bacd` |
+| `/tmp/gotth-portability-fuzz-roundtrip-55ba145.raw.log` | `77a7021cb82a63d47b2420aa9898021cf0e7168a51a80264c62d1b6a80e55f32` |
+| `/tmp/gotth-portability-fuzz-checkpoint-55ba145.log` | `9ea404bf6fe25542b11d1dbf08ebf7c4fee7929d6c7f37a0c64edd8595e394da` |
+| `/tmp/gotth-portability-fuzz-checkpoint-55ba145.raw.log` | `bfcd39a8b2ef7cbb593f713d031dab0cacfcad0cd5b6cc76f9a43e7ad8522ed4` |
+| `/tmp/gotth-portability-fuzz-arbitrary-55ba145.log` | `44d8c3997b212a789d9fdf06a08301df98c1fb8e9807653b997470bf3ee7d953` |
+| `/tmp/gotth-portability-fuzz-arbitrary-55ba145.raw.log` | `7771b7171f61c8c5cc1538df80180a2f64c1b2b6103943222f9eb30264d1ce0c` |
+| `/tmp/gotth-portability-fuzz-mutation-55ba145.log` | `2708631398deaa5c8c99fde5430bb483139c5f29cacecb24ebb82121aa248e36` |
+| `/tmp/gotth-portability-fuzz-mutation-55ba145.raw.log` | `9596fa41a5962de8734652299ceedd0bf5b2c54161489d8481b7391069350ca2` |
+| `/tmp/gotth-portability-clean-clone-55ba145.log` | `cd8425eb2f478538c133f34415f954f81a011b3aaae1b4822426f04886197560` |
+| `/tmp/gotth-portability-clean-clone-55ba145.raw.log` | `c7ef7e74144a76692188d478ee855f6094dcdeab59855e5602bda21a973794a4` |
+| `/tmp/gotth-portability-evidence-55ba145.sh` | `c3cf48e001529f0577361f3981e2d285e8eb96384295dfcadfa89155f46d7110` |
+| `/tmp/gotth-portability-changelog-audit.sh` | `da134c5d0b493d2f9ccc8b9b1ec3710b8c207bc27e277a1261a19864c16d3318` |
+
+| Prior contract-audit artifact | SHA-256 |
 | --- | --- |
 | `/tmp/gotth-portability-contract-63b7c8a.log` | `532850d2138a1aa4c57ab0d64bf43ab4286febe6ead4dfbbf3be10fcf07f2956` |
 | `/tmp/gotth-portability-contract-63b7c8a.raw.log` | `203875350dc9b04020cfec372572691f9eb8f4b2dd6edcea13b4448d9b9129b7` |
@@ -158,8 +199,8 @@ remains redaction-safe.
 | `/tmp/gotth-portability-coverage-63b7c8a.out` | `2b3dd68f02583c8ad3d6ccb4a0eaf9f32ac3a01eeea0828dd2cca46d8e52ec11` |
 
 The following artifacts bind runtime baseline `d22c2de`. They remain relevant
-because `63b7c8a` changes comments, documentation, and tests only; they are not
-represented as current-source executions.
+because source `55ba145` changes comments, documentation, and tests only; they
+are not represented as current-source executions.
 
 | Unchanged-runtime baseline artifact | SHA-256 |
 | --- | --- |
@@ -247,6 +288,15 @@ contradicted their named commits' Git times. Exact source `63b7c8a` corrects the
 constructor contract, normalizes and orders the headings, and defines their
 author-time provenance. A retained focused audit checks both claims against
 source and Git history; full and coverage traces bind the exact correction.
+Independent review of evidence head `b1f718a` then found five adjacent cost
+contracts that still counted skipped delegated calls, historical changelog file
+claims that did not equal their named commits, and untested public
+`ResumeImporter` rejection/cancellation branches. Exact source `55ba145`
+qualifies each named cost path, replaces every affected-file shorthand with the
+exact named-commit union, and raises `ResumeImporter` to 100% statement
+coverage with direct no-I/O and restoration proof. Fresh exact-source traces
+bind full verification, 94.7% race coverage, focused race x3, four fuzz probes,
+and a clean clone. The final evidence commit remains documentation-only.
 
 ## Remaining gate
 
