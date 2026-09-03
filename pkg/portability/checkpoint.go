@@ -2,6 +2,7 @@ package portability
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/binary"
 )
@@ -154,7 +155,7 @@ func ParseCheckpoint(data []byte, limits Limits) (Checkpoint, error) {
 		return Checkpoint{}, wrap(ErrIntegrity, "checkpoint digest", nil)
 	}
 	headerReader := bytes.NewReader(data[12 : 12+headerLen])
-	header, _, err := readHeader(headerReader)
+	header, _, err := readHeader(context.Background(), headerReader)
 	if err != nil || headerReader.Len() != 0 {
 		return Checkpoint{}, wrap(ErrMalformed, "checkpoint header", err)
 	}

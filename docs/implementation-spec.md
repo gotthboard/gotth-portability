@@ -25,24 +25,34 @@ valid footer is required.
 Archive ID and schema ID are at most 256 bytes, record kind 128 bytes, and key
 1024 bytes. UTF-8 is required and NUL is rejected. Caller-supplied `Limits`
 bound record count, individual payload bytes, and total payload bytes; zero
-selects documented defaults. Copying uses one fixed 32 KiB buffer.
+selects documented defaults. Each exporter/importer lazily allocates one fixed
+32 KiB buffer for its first non-empty record and reuses it. Empty records do not
+allocate the payload buffer.
 
 ## Public contracts
 
 - `NewExporter` writes and hashes one header; `WriteRecord` streams exactly the
   declared payload length and returns a boundary checkpoint; `Finalize` writes
-  one footer and returns the manifest. `Exporter.Checkpoint` returns the last
-  safe boundary even when the first record fails after partial output.
+  one footer and returns the manifest. All three operations accept a context
+  and check cancellation before and after caller-owned I/O. `Exporter.Checkpoint`
+  returns the last safe boundary even when the first record fails after partial
+  output.
 - `ResumeExporter` restores the header, counters, chain, and offset from a
   validated checkpoint; it trusts the caller to position an append target at
   that exact offset.
-- `NewImporter` reads and compatibility-checks the header before any sink is
-  opened. `Importer.Checkpoint` returns the last committed boundary even after
-  an unknown sink-commit outcome. `ResumeImporter` restores validated boundary
-  state and trusts the caller to position input at the checkpoint offset.
+- `NewImporter` and `ResumeImporter` accept a context and compatibility-check
+  the header before any sink is opened. `Compatibility`, `Sink.Begin`, staged
+  writes, `Commit`, and all reads are cancellation-bracketed. `Importer.Checkpoint`
+  returns the last committed boundary even after an unknown sink-commit outcome.
+  `ResumeImporter` restores validated boundary state and trusts the caller to
+  position input at the checkpoint offset.
 - `Next` stages, streams, validates, and commits one record. It returns
   `ErrComplete` only after footer and EOF validation. `Manifest` fails until
   that explicit completion state exists.
+- Failures before commit call `Abort` with a cancellation-independent context
+  whose deadline is `AbortTimeout`. A commit error, or cancellation observed
+  after a commit call, has unknown outcome and does not call `Abort` or advance
+  the checkpoint.
 - Checkpoints have a versioned binary encoding protected by SHA-256. Decoding
   rejects corruption, unknown versions, and structurally inconsistent state.
 
@@ -51,4 +61,6 @@ selects documented defaults. Copying uses one fixed 32 KiB buffer.
 Public sentinels distinguish invalid arguments, malformed/truncated stream, I/O
 failure, incompatibility, limit overflow, integrity failure, sequence mismatch,
 sink failure, incomplete state, finalized state, and clean completion. Wrapped
-errors retain a cause but never include payload content.
+errors never include payload or callback text. `errors.Is` traverses only the
+library classification; callers may explicitly retrieve the underlying error
+through `Causer.Cause` without letting callback values spoof library sentinels.

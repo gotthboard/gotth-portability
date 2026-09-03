@@ -26,15 +26,19 @@ offset.
 
 An importer asks the consumer for a staged `RecordSink`, streams exactly one
 payload into it, validates the payload digest, and only then calls `Commit`.
-Checksum or stream failure calls `Abort`. Sink implementations must make
-`Commit` idempotent by archive identity and sequence and must treat a commit
-error as potentially having taken effect. The library cannot resolve a
-consumer backend's unknown commit outcome.
+Checksum, stream, or pre-commit cancellation calls `Abort` with a fresh cleanup
+context bounded by `AbortTimeout`. Sink implementations must honor that
+deadline, make `Commit` idempotent by archive identity and sequence, and treat
+a commit error or cancellation observed after `Commit` as potentially having
+taken effect. The library cannot resolve a consumer backend's unknown commit
+outcome and therefore neither aborts nor advances its checkpoint then.
 
 ## Failure model
 
 Malformed, truncated, incompatible, over-limit, corrupt, out-of-sequence, and
 trailing input fails closed under stable sentinels. The library emits no logs
-and error text contains field names and positions, never payloads. A successful
-record checkpoint is not proof that the archive is complete; only `Manifest`
-after `ErrComplete` is the completeness oracle.
+and error text contains operation names, never payloads or callback text.
+Underlying causes are available only through `Causer`, not sentinel traversal,
+so a callback returning (for example) `ErrComplete` cannot forge completion. A
+successful record checkpoint is not proof that the archive is complete; only
+`Manifest` after a library-produced `ErrComplete` is the completeness oracle.

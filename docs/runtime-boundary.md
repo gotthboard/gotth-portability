@@ -9,13 +9,18 @@
 
 ## Authoritative contracts
 
-- `io.Reader` may return data and an error together; copy loops account for
-  both and never assume one read fills a buffer.
+- `io.Reader` may return data and an error together or transiently return
+  `(0, nil)`; copy loops account for both, validate counts before slicing, and
+  fail with `io.ErrNoProgress` after `MaxConsecutiveEmptyReads` empty results.
 - `io.Writer` may short-write and must return a non-nil error when doing so;
-  exact-write helpers nevertheless reject any unexplained short write.
+  exact-write helpers make one call and reject any unexplained short write
+  without retrying a potentially side-effecting callback.
 - `crypto/sha256.Sum256` returns the standardized 32-byte SHA-256 digest.
-- `context.Context` cancellation is checked between bounded reads/writes; it
-  cannot forcibly interrupt a misbehaving consumer `Reader`, `Writer`, or sink.
+- `context.Context` cancellation is checked immediately before and after every
+  consumer `Reader`, `Writer`, compatibility, or sink callback. It cannot
+  forcibly interrupt a misbehaving callback. `Abort` receives a fresh
+  cancellation-independent context with an `AbortTimeout` deadline, which a
+  conforming sink must honor; the library cannot stop a sink that ignores it.
 
 ## Limits and completeness
 

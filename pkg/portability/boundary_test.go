@@ -52,7 +52,7 @@ func TestRecordAndTotalLimitsAtBoundary(t *testing.T) {
 
 	for _, size := range []uint64{2, 3, 4, 12} {
 		var out bytes.Buffer
-		ex, err := NewExporter(&out, testHeader(), Limits{MaxRecords: 3, MaxRecordBytes: 3, MaxTotalBytes: 6})
+		ex, err := NewExporter(context.Background(), &out, testHeader(), Limits{MaxRecords: 3, MaxRecordBytes: 3, MaxTotalBytes: 6})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -66,7 +66,7 @@ func TestRecordAndTotalLimitsAtBoundary(t *testing.T) {
 	}
 
 	var out bytes.Buffer
-	ex, err := NewExporter(&out, testHeader(), Limits{MaxRecords: 2, MaxRecordBytes: 3, MaxTotalBytes: 5})
+	ex, err := NewExporter(context.Background(), &out, testHeader(), Limits{MaxRecords: 2, MaxRecordBytes: 3, MaxTotalBytes: 5})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -88,7 +88,7 @@ func TestRecordAndTotalLimitsAtBoundary(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var target bytes.Buffer
-			ex, err := NewExporter(&target, testHeader(), Limits{MaxRecords: 3, MaxRecordBytes: 5, MaxTotalBytes: 5})
+			ex, err := NewExporter(context.Background(), &target, testHeader(), Limits{MaxRecords: 3, MaxRecordBytes: 5, MaxTotalBytes: 5})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -108,7 +108,7 @@ func TestRecordAndTotalLimitsAtBoundary(t *testing.T) {
 	}
 
 	var countOut bytes.Buffer
-	counted, err := NewExporter(&countOut, testHeader(), Limits{MaxRecords: 2, MaxRecordBytes: 1, MaxTotalBytes: 3})
+	counted, err := NewExporter(context.Background(), &countOut, testHeader(), Limits{MaxRecords: 2, MaxRecordBytes: 1, MaxTotalBytes: 3})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -130,7 +130,7 @@ func TestImporterRejectsRecordSizeBeforeOpeningSink(t *testing.T) {
 	t.Parallel()
 
 	data := archiveBytes(t, Record{Kind: "x", Size: 4, Body: strings.NewReader("data")})
-	im, err := NewImporter(bytes.NewReader(data), Limits{MaxRecords: 1, MaxRecordBytes: 3, MaxTotalBytes: 10}, acceptExact)
+	im, err := NewImporter(context.Background(), bytes.NewReader(data), Limits{MaxRecords: 1, MaxRecordBytes: 3, MaxTotalBytes: 10}, acceptExact)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -154,7 +154,7 @@ func TestImporterRejectsCumulativeSizeBeforeOpeningNextSink(t *testing.T) {
 		Record{Kind: "x", Size: 3, Body: strings.NewReader("one")},
 		Record{Kind: "x", Size: 3, Body: strings.NewReader("two")},
 	)
-	im, err := NewImporter(bytes.NewReader(data), Limits{MaxRecords: 2, MaxRecordBytes: 3, MaxTotalBytes: 5}, acceptExact)
+	im, err := NewImporter(context.Background(), bytes.NewReader(data), Limits{MaxRecords: 2, MaxRecordBytes: 3, MaxTotalBytes: 5}, acceptExact)
 	if err != nil {
 		t.Fatal(err)
 	}

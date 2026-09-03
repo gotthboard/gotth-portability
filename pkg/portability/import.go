@@ -16,6 +16,7 @@ type Importer struct {
 	limits     Limits
 	cp         Checkpoint
 	readOffset uint64
+	buffer     []byte
 	done       bool
 	manifest   Manifest
 	complete   bool
@@ -26,20 +27,27 @@ type Importer struct {
 // Complexity: time O(a+s)+R(a+s)+C, Omega(1), tight Theta(a+s)+R(a+s)+C on
 // success; auxiliary space O(a+s), Omega(1), tight Theta(a+s); variables: a/s
 // identifier lengths, R reader cost, C delegated compatibility cost.
-func NewImporter(r io.Reader, limits Limits, compatibility Compatibility) (*Importer, error) {
-	if r == nil || compatibility == nil {
-		return nil, wrap(ErrInvalid, "reader or compatibility", nil)
+func NewImporter(ctx context.Context, r io.Reader, limits Limits, compatibility Compatibility) (*Importer, error) {
+	if ctx == nil || r == nil || compatibility == nil {
+		return nil, wrap(ErrInvalid, "context, reader, or compatibility", nil)
 	}
 	normalized, err := limits.normalize()
 	if err != nil {
 		return nil, err
 	}
-	header, encoded, err := readHeader(r)
+	header, encoded, err := readHeader(ctx, r)
 	if err != nil {
 		return nil, err
 	}
-	if err := compatibility(header); err != nil {
-		return nil, wrap(ErrIncompatible, "consumer schema", err)
+	if err := ctx.Err(); err != nil {
+		return nil, wrap(ErrIO, "consumer schema", err)
+	}
+	compatibilityErr := compatibility(ctx, header)
+	if err := ctx.Err(); err != nil {
+		return nil, wrap(ErrIO, "consumer schema", err)
+	}
+	if compatibilityErr != nil {
+		return nil, wrap(ErrIncompatible, "consumer schema", compatibilityErr)
 	}
 	chain := sha256.Sum256(encoded)
 	cp := Checkpoint{header: header, offset: uint64(len(encoded)), chain: chain}
@@ -51,9 +59,9 @@ func NewImporter(r io.Reader, limits Limits, compatibility Compatibility) (*Impo
 // Complexity: time O(a+s)+C, Omega(1), tight Theta(a+s)+C for valid state;
 // auxiliary space O(1), Omega(1), tight Theta(1); variables: a/s identifier
 // lengths and C delegated compatibility cost.
-func ResumeImporter(r io.Reader, checkpoint Checkpoint, limits Limits, compatibility Compatibility) (*Importer, error) {
-	if r == nil || compatibility == nil {
-		return nil, wrap(ErrInvalid, "reader or compatibility", nil)
+func ResumeImporter(ctx context.Context, r io.Reader, checkpoint Checkpoint, limits Limits, compatibility Compatibility) (*Importer, error) {
+	if ctx == nil || r == nil || compatibility == nil {
+		return nil, wrap(ErrInvalid, "context, reader, or compatibility", nil)
 	}
 	normalized, err := limits.normalize()
 	if err != nil {
@@ -62,8 +70,15 @@ func ResumeImporter(r io.Reader, checkpoint Checkpoint, limits Limits, compatibi
 	if err := checkpoint.validate(normalized); err != nil {
 		return nil, err
 	}
-	if err := compatibility(checkpoint.header); err != nil {
-		return nil, wrap(ErrIncompatible, "consumer schema", err)
+	if err := ctx.Err(); err != nil {
+		return nil, wrap(ErrIO, "consumer schema", err)
+	}
+	compatibilityErr := compatibility(ctx, checkpoint.header)
+	if err := ctx.Err(); err != nil {
+		return nil, wrap(ErrIO, "consumer schema", err)
+	}
+	if compatibilityErr != nil {
+		return nil, wrap(ErrIncompatible, "consumer schema", compatibilityErr)
 	}
 	return &Importer{r: r, limits: normalized, cp: checkpoint, readOffset: checkpoint.offset}, nil
 }
@@ -92,9 +107,9 @@ func (i *Importer) Checkpoint() Checkpoint {
 // Next validates and commits one record or returns ErrComplete after validating
 // the manifest and required EOF. A non-completion failure poisons this importer.
 // Complexity: record time O(k+r+n)+R(n)+W(n)+S, Omega(k+r), tight
-// Theta(k+r+n)+R(n)+W(n)+S on success; auxiliary space O(k+r+B), Omega(k+r),
-// tight Theta(k+r+B) for n>0; variables: metadata k/r, payload n,
-// B=min(n,32KiB), reader R, sink writer W, and sink callbacks S.
+// Theta(k+r+n)+R(n)+W(n)+S on success. The first non-empty record adds one
+// retained 32KiB buffer; empty and later records add only Theta(k+r) local
+// space. Variables k/r are metadata lengths, n payload size, and S callbacks.
 func (i *Importer) Next(ctx context.Context, sink Sink) (Checkpoint, error) {
 	if i == nil || sink == nil {
 		return Checkpoint{}, wrap(ErrInvalid, "importer or sink", nil)
@@ -105,11 +120,14 @@ func (i *Importer) Next(ctx context.Context, sink Sink) (Checkpoint, error) {
 	if i.done {
 		return Checkpoint{}, wrap(ErrFinalized, "read record", nil)
 	}
+	if ctx == nil {
+		return Checkpoint{}, wrap(ErrInvalid, "context", nil)
+	}
 	if err := ctx.Err(); err != nil {
 		return Checkpoint{}, wrap(ErrIO, "read frame", err)
 	}
 	var frame [1]byte
-	if err := i.readExact(frame[:], "read frame"); err != nil {
+	if err := i.readExact(ctx, frame[:], "read frame"); err != nil {
 		i.done = true
 		return Checkpoint{}, err
 	}
@@ -121,7 +139,7 @@ func (i *Importer) Next(ctx context.Context, sink Sink) (Checkpoint, error) {
 		}
 		return checkpoint, err
 	case footerFrame:
-		if err := i.readFooter(); err != nil {
+		if err := i.readFooter(ctx); err != nil {
 			i.done = true
 			return Checkpoint{}, err
 		}
@@ -143,10 +161,10 @@ func (i *Importer) Manifest() (Manifest, error) {
 
 // readRecord stages, hashes, verifies, and commits one record.
 // Complexity: time O(k+r+n)+R(n)+W(n)+S, Omega(k+r), tight
-// Theta(k+r+n)+R(n)+W(n)+S on success; auxiliary space O(k+r+B), Omega(k+r),
-// tight Theta(k+r+B) for n>0; variables and delegated costs match Next.
+// Theta(k+r+n)+R(n)+W(n)+S on success. Allocation and retained-buffer costs
+// match Next; variables and delegated costs match Next.
 func (i *Importer) readRecord(ctx context.Context, sink Sink) (Checkpoint, error) {
-	meta, prefix, err := i.readRecordMeta()
+	meta, prefix, err := i.readRecordMeta(ctx)
 	if err != nil {
 		return Checkpoint{}, err
 	}
@@ -160,23 +178,40 @@ func (i *Importer) readRecord(ctx context.Context, sink Sink) (Checkpoint, error
 	if overflow || total > i.limits.MaxTotalBytes {
 		return Checkpoint{}, wrap(ErrLimit, "total payload", nil)
 	}
-	stage, err := sink.Begin(ctx, i.cp.header, meta)
-	if err != nil || stage == nil {
-		return Checkpoint{}, wrap(ErrSink, "begin record", err)
+	if err := ctx.Err(); err != nil {
+		return Checkpoint{}, wrap(ErrIO, "begin record", err)
+	}
+	stage, beginErr := sink.Begin(ctx, i.cp.header, meta)
+	if err := ctx.Err(); err != nil {
+		primary := wrap(ErrIO, "begin record", err)
+		if stage != nil {
+			return Checkpoint{}, i.abort(ctx, stage, primary)
+		}
+		return Checkpoint{}, primary
+	}
+	if beginErr != nil || stage == nil {
+		return Checkpoint{}, wrap(ErrSink, "begin record", beginErr)
 	}
 	digest, err := i.copyPayload(ctx, stage, meta.Size)
 	if err != nil {
 		return Checkpoint{}, i.abort(ctx, stage, err)
 	}
 	var expected [sha256.Size]byte
-	if err := i.readExact(expected[:], "read record digest"); err != nil {
+	if err := i.readExact(ctx, expected[:], "read record digest"); err != nil {
 		return Checkpoint{}, i.abort(ctx, stage, err)
 	}
 	if !bytes.Equal(digest[:], expected[:]) {
 		return Checkpoint{}, i.abort(ctx, stage, wrap(ErrIntegrity, "record digest", nil))
 	}
-	if err := stage.Commit(ctx); err != nil {
-		return Checkpoint{}, wrap(ErrSink, "commit record; outcome may be unknown", err)
+	if err := ctx.Err(); err != nil {
+		return Checkpoint{}, i.abort(ctx, stage, wrap(ErrIO, "commit record", err))
+	}
+	commitErr := stage.Commit(ctx)
+	if err := ctx.Err(); err != nil {
+		return Checkpoint{}, wrap(ErrIO, "commit record; outcome may be unknown", err)
+	}
+	if commitErr != nil {
+		return Checkpoint{}, wrap(ErrSink, "commit record; outcome may be unknown", commitErr)
 	}
 	i.cp.chain = nextChain(i.cp.chain, prefix, digest)
 	i.cp.records++
@@ -188,11 +223,18 @@ func (i *Importer) readRecord(ctx context.Context, sink Sink) (Checkpoint, error
 
 // copyPayload transfers exactly size bytes to staged storage while hashing.
 // Complexity: time O(n)+R(n)+W(n), Omega(1), tight Theta(n)+R(n)+W(n) on
-// success; auxiliary space O(min(n,32KiB)), Omega(1), tight Theta(min(n,32KiB));
+// success; the first non-empty record allocates one 32KiB reusable buffer,
+// while empty records allocate none and later records reuse retained storage;
 // variable n is size and R/W are delegated I/O costs.
 func (i *Importer) copyPayload(ctx context.Context, dst io.Writer, size uint64) ([32]byte, error) {
 	h := sha256.New()
-	buf := make([]byte, copyBufferBytes)
+	var buf []byte
+	if size > 0 {
+		if i.buffer == nil {
+			i.buffer = make([]byte, copyBufferBytes)
+		}
+		buf = i.buffer
+	}
 	remaining := size
 	for remaining > 0 {
 		if err := ctx.Err(); err != nil {
@@ -202,10 +244,13 @@ func (i *Importer) copyPayload(ctx context.Context, dst io.Writer, size uint64) 
 		if remaining < want {
 			want = remaining
 		}
-		if err := i.readExact(buf[:int(want)], "read payload"); err != nil {
+		if err := i.readExact(ctx, buf[:int(want)], "read payload"); err != nil {
 			return [32]byte{}, err
 		}
-		if _, err := writeExact(dst, buf[:int(want)]); err != nil {
+		if _, err := writeExactContext(ctx, dst, buf[:int(want)]); err != nil {
+			if ctxErr := ctx.Err(); ctxErr != nil {
+				return [32]byte{}, wrap(ErrIO, "write staged record", ctxErr)
+			}
 			return [32]byte{}, wrap(ErrSink, "write staged record", err)
 		}
 		writeHash(h, buf[:int(want)])
@@ -221,7 +266,9 @@ func (i *Importer) copyPayload(ctx context.Context, dst io.Writer, size uint64) 
 // Complexity: delegated time/space equal Abort; local time and auxiliary space
 // O(1), Omega(1), tight Theta(1), excluding error allocation.
 func (i *Importer) abort(ctx context.Context, stage RecordSink, primary error) error {
-	if err := stage.Abort(context.WithoutCancel(ctx)); err != nil {
+	cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), AbortTimeout)
+	defer cancel()
+	if err := stage.Abort(cleanupCtx); err != nil {
 		return errors.Join(primary, wrap(ErrSink, "abort record", err))
 	}
 	return primary
@@ -231,20 +278,20 @@ func (i *Importer) abort(ctx context.Context, stage RecordSink, primary error) e
 // Complexity: time O(k+r)+R(k+r), Omega(1), tight Theta(k+r)+R(k+r) on
 // success; auxiliary space O(k+r), Omega(1), tight Theta(k+r); variables k/r
 // are metadata lengths and R is delegated reader cost.
-func (i *Importer) readRecordMeta() (RecordMeta, []byte, error) {
-	sequence, err := i.readUint64("read record sequence")
+func (i *Importer) readRecordMeta(ctx context.Context) (RecordMeta, []byte, error) {
+	sequence, err := i.readUint64(ctx, "read record sequence")
 	if err != nil {
 		return RecordMeta{}, nil, err
 	}
-	kind, err := i.readText(maxKindBytes, false, "record kind")
+	kind, err := i.readText(ctx, maxKindBytes, false, "record kind")
 	if err != nil {
 		return RecordMeta{}, nil, err
 	}
-	key, err := i.readText(maxKeyBytes, true, "record key")
+	key, err := i.readText(ctx, maxKeyBytes, true, "record key")
 	if err != nil {
 		return RecordMeta{}, nil, err
 	}
-	size, err := i.readUint64("read payload size")
+	size, err := i.readUint64(ctx, "read payload size")
 	if err != nil {
 		return RecordMeta{}, nil, err
 	}
@@ -255,17 +302,17 @@ func (i *Importer) readRecordMeta() (RecordMeta, []byte, error) {
 // readFooter verifies counts, chain, and immediate EOF before marking complete.
 // Complexity: time O(1)+R(1), Omega(1), tight Theta(1)+R(1); auxiliary space
 // O(1), Omega(1), tight Theta(1); R is fixed-size delegated reader cost.
-func (i *Importer) readFooter() error {
-	records, err := i.readUint64("read manifest records")
+func (i *Importer) readFooter(ctx context.Context) error {
+	records, err := i.readUint64(ctx, "read manifest records")
 	if err != nil {
 		return err
 	}
-	payloadBytes, err := i.readUint64("read manifest payload bytes")
+	payloadBytes, err := i.readUint64(ctx, "read manifest payload bytes")
 	if err != nil {
 		return err
 	}
 	var chain [sha256.Size]byte
-	if err := i.readExact(chain[:], "read manifest chain"); err != nil {
+	if err := i.readExact(ctx, chain[:], "read manifest chain"); err != nil {
 		return err
 	}
 	if records != i.cp.records || payloadBytes != i.cp.payloadBytes {
@@ -274,8 +321,12 @@ func (i *Importer) readFooter() error {
 	if !bytes.Equal(chain[:], i.cp.chain[:]) {
 		return wrap(ErrIntegrity, "manifest chain", nil)
 	}
-	var trailing [1]byte
-	n, readErr := i.r.Read(trailing[:])
+	n, readErr := probeEOFContext(ctx, i.r)
+	nextOffset, overflow := checkedAdd(i.readOffset, uint64(n))
+	if overflow {
+		return wrap(ErrLimit, "stream offset", nil)
+	}
+	i.readOffset = nextOffset
 	if n != 0 {
 		return wrap(ErrMalformed, "trailing archive data", nil)
 	}
@@ -292,8 +343,8 @@ func (i *Importer) readFooter() error {
 // Complexity: time O(n)+R(n), Omega(1), tight Theta(n)+R(n) on success;
 // auxiliary space O(1), Omega(1), tight Theta(1); variable n is len(p), R is
 // delegated reader cost.
-func (i *Importer) readExact(p []byte, op string) error {
-	n, err := io.ReadFull(i.r, p)
+func (i *Importer) readExact(ctx context.Context, p []byte, op string) error {
+	n, err := readExactContext(ctx, i.r, p)
 	nextOffset, overflow := checkedAdd(i.readOffset, uint64(n))
 	if overflow {
 		return wrap(ErrLimit, "stream offset", nil)
@@ -311,9 +362,9 @@ func (i *Importer) readExact(p []byte, op string) error {
 // readUint64 reads one canonical unsigned integer.
 // Complexity: time O(1)+R(1), Omega(1), tight Theta(1)+R(1); auxiliary space
 // O(1), Omega(1), tight Theta(1); R is one fixed-size delegated read.
-func (i *Importer) readUint64(op string) (uint64, error) {
+func (i *Importer) readUint64(ctx context.Context, op string) (uint64, error) {
 	var b [8]byte
-	if err := i.readExact(b[:], op); err != nil {
+	if err := i.readExact(ctx, b[:], op); err != nil {
 		return 0, err
 	}
 	return binary.BigEndian.Uint64(b[:]), nil
@@ -323,9 +374,9 @@ func (i *Importer) readUint64(op string) (uint64, error) {
 // Complexity: time O(n)+R(n), Omega(1), tight Theta(n)+R(n) on success;
 // auxiliary space O(n), Omega(1), tight Theta(n); variable n is encoded text
 // length and R is delegated reader cost.
-func (i *Importer) readText(max int, allowEmpty bool, field string) (string, error) {
+func (i *Importer) readText(ctx context.Context, max int, allowEmpty bool, field string) (string, error) {
 	var length [2]byte
-	if err := i.readExact(length[:], "read "+field+" length"); err != nil {
+	if err := i.readExact(ctx, length[:], "read "+field+" length"); err != nil {
 		return "", err
 	}
 	n := int(binary.BigEndian.Uint16(length[:]))
@@ -333,7 +384,7 @@ func (i *Importer) readText(max int, allowEmpty bool, field string) (string, err
 		return "", wrap(ErrMalformed, field, nil)
 	}
 	b := make([]byte, n)
-	if err := i.readExact(b, "read "+field); err != nil {
+	if err := i.readExact(ctx, b, "read "+field); err != nil {
 		return "", err
 	}
 	if !utf8.Valid(b) || bytes.IndexByte(b, 0) >= 0 {
@@ -347,33 +398,33 @@ func (i *Importer) readText(max int, allowEmpty bool, field string) (string, err
 // Complexity: time O(a+s)+R(a+s), Omega(1), tight Theta(a+s)+R(a+s) on
 // success; auxiliary space O(a+s), Omega(1), tight Theta(a+s); variables a/s
 // are identifier lengths and R is delegated reader cost.
-func readHeader(r io.Reader) (Header, []byte, error) {
+func readHeader(ctx context.Context, r io.Reader) (Header, []byte, error) {
 	reader := &Importer{r: r}
 	var magic [8]byte
-	if err := reader.readExact(magic[:], "read header magic"); err != nil {
+	if err := reader.readExact(ctx, magic[:], "read header magic"); err != nil {
 		return Header{}, nil, err
 	}
 	if magic != streamMagic {
 		return Header{}, nil, wrap(ErrMalformed, "header magic", nil)
 	}
 	var versionBytes [2]byte
-	if err := reader.readExact(versionBytes[:], "read wire version"); err != nil {
+	if err := reader.readExact(ctx, versionBytes[:], "read wire version"); err != nil {
 		return Header{}, nil, err
 	}
 	version := binary.BigEndian.Uint16(versionBytes[:])
 	if version != WireVersion {
 		return Header{}, nil, wrap(ErrIncompatible, "wire version", nil)
 	}
-	archiveID, err := reader.readText(maxArchiveIDBytes, false, "archive id")
+	archiveID, err := reader.readText(ctx, maxArchiveIDBytes, false, "archive id")
 	if err != nil {
 		return Header{}, nil, err
 	}
-	schema, err := reader.readText(maxSchemaBytes, false, "schema")
+	schema, err := reader.readText(ctx, maxSchemaBytes, false, "schema")
 	if err != nil {
 		return Header{}, nil, err
 	}
 	var schemaVersion [4]byte
-	if err := reader.readExact(schemaVersion[:], "read schema version"); err != nil {
+	if err := reader.readExact(ctx, schemaVersion[:], "read schema version"); err != nil {
 		return Header{}, nil, err
 	}
 	header := Header{WireVersion: version, ArchiveID: archiveID, Schema: schema, SchemaVersion: binary.BigEndian.Uint32(schemaVersion[:])}

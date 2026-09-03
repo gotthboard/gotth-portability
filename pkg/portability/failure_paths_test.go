@@ -84,23 +84,23 @@ func (r *failAfterReader) Read(p []byte) (int, error) {
 func TestExporterArgumentAndIOFailures(t *testing.T) {
 	t.Parallel()
 
-	if _, err := NewExporter(nil, testHeader(), Limits{}); !errors.Is(err, ErrInvalid) {
+	if _, err := NewExporter(context.Background(), nil, testHeader(), Limits{}); !errors.Is(err, ErrInvalid) {
 		t.Fatalf("nil writer = %v", err)
 	}
-	if _, err := NewExporter(io.Discard, Header{}, Limits{}); !errors.Is(err, ErrInvalid) {
+	if _, err := NewExporter(context.Background(), io.Discard, Header{}, Limits{}); !errors.Is(err, ErrInvalid) {
 		t.Fatalf("invalid header = %v", err)
 	}
-	if _, err := NewExporter(io.Discard, testHeader(), Limits{MaxRecordBytes: 2, MaxTotalBytes: 1}); !errors.Is(err, ErrInvalid) {
+	if _, err := NewExporter(context.Background(), io.Discard, testHeader(), Limits{MaxRecordBytes: 2, MaxTotalBytes: 1}); !errors.Is(err, ErrInvalid) {
 		t.Fatalf("invalid limits = %v", err)
 	}
 	for _, writer := range []io.Writer{&failingWriter{}, &failingWriter{short: true}} {
-		if _, err := NewExporter(writer, testHeader(), Limits{}); !errors.Is(err, ErrIO) || strings.Contains(err.Error(), "secret") {
+		if _, err := NewExporter(context.Background(), writer, testHeader(), Limits{}); !errors.Is(err, ErrIO) || strings.Contains(err.Error(), "secret") {
 			t.Fatalf("header writer = %v", err)
 		}
 	}
 
 	var out bytes.Buffer
-	ex, err := NewExporter(&out, testHeader(), Limits{MaxRecords: 1, MaxRecordBytes: 2, MaxTotalBytes: 2})
+	ex, err := NewExporter(context.Background(), &out, testHeader(), Limits{MaxRecords: 1, MaxRecordBytes: 2, MaxTotalBytes: 2})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -116,7 +116,7 @@ func TestExporterArgumentAndIOFailures(t *testing.T) {
 
 	for _, reader := range []io.Reader{noProgressReader{}, oversizedCountReader{}} {
 		var target bytes.Buffer
-		ex, err := NewExporter(&target, testHeader(), Limits{})
+		ex, err := NewExporter(context.Background(), &target, testHeader(), Limits{})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -125,7 +125,7 @@ func TestExporterArgumentAndIOFailures(t *testing.T) {
 		}
 	}
 	var boundaryOut bytes.Buffer
-	boundaryExporter, err := NewExporter(&boundaryOut, testHeader(), Limits{})
+	boundaryExporter, err := NewExporter(context.Background(), &boundaryOut, testHeader(), Limits{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -137,11 +137,11 @@ func TestExporterArgumentAndIOFailures(t *testing.T) {
 	canceled, cancel := context.WithCancel(context.Background())
 	cancel()
 	var canceledOut bytes.Buffer
-	canceledExporter, err := NewExporter(&canceledOut, testHeader(), Limits{})
+	canceledExporter, err := NewExporter(context.Background(), &canceledOut, testHeader(), Limits{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := canceledExporter.WriteRecord(canceled, Record{Kind: "x", Size: 1, Body: strings.NewReader("a")}); !errors.Is(err, context.Canceled) || !errors.Is(err, ErrIO) {
+	if _, err := canceledExporter.WriteRecord(canceled, Record{Kind: "x", Size: 1, Body: strings.NewReader("a")}); !errors.Is(err, ErrIO) || errors.Is(err, context.Canceled) || !causeIs(err, context.Canceled) {
 		t.Fatalf("canceled write = %v", err)
 	}
 }
@@ -152,7 +152,7 @@ func TestExporterRecordAndFooterWriterFailures(t *testing.T) {
 	headerLen := len(encodeHeader(testHeader()))
 	for _, remaining := range []int{headerLen + 1, headerLen + 30, headerLen + 50} {
 		writer := &failingWriter{remaining: remaining}
-		ex, err := NewExporter(writer, testHeader(), Limits{})
+		ex, err := NewExporter(context.Background(), writer, testHeader(), Limits{})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -163,11 +163,11 @@ func TestExporterRecordAndFooterWriterFailures(t *testing.T) {
 	}
 
 	writer := &failingWriter{remaining: headerLen}
-	ex, err := NewExporter(writer, testHeader(), Limits{})
+	ex, err := NewExporter(context.Background(), writer, testHeader(), Limits{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := ex.Finalize(); !errors.Is(err, ErrIO) {
+	if _, err := ex.Finalize(context.Background()); !errors.Is(err, ErrIO) {
 		t.Fatalf("footer writer = %v", err)
 	}
 }
@@ -176,7 +176,7 @@ func TestResumeArgumentFailuresAndCheckpointAccessors(t *testing.T) {
 	t.Parallel()
 
 	var out bytes.Buffer
-	ex, err := NewExporter(&out, testHeader(), Limits{})
+	ex, err := NewExporter(context.Background(), &out, testHeader(), Limits{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -199,7 +199,7 @@ func TestResumeArgumentFailuresAndCheckpointAccessors(t *testing.T) {
 	if _, err := nilExporter.WriteRecord(context.Background(), Record{}); !errors.Is(err, ErrFinalized) {
 		t.Fatalf("nil exporter write = %v", err)
 	}
-	if _, err := nilExporter.Finalize(); !errors.Is(err, ErrFinalized) {
+	if _, err := nilExporter.Finalize(context.Background()); !errors.Is(err, ErrFinalized) {
 		t.Fatalf("nil exporter finalize = %v", err)
 	}
 }
@@ -209,7 +209,7 @@ func TestEveryArchiveTruncationFailsClosed(t *testing.T) {
 
 	data := archiveBytes(t, Record{Kind: "kind", Key: "key", Size: 5, Body: strings.NewReader("value")})
 	for cut := 0; cut < len(data); cut++ {
-		im, err := NewImporter(bytes.NewReader(data[:cut]), Limits{}, acceptExact)
+		im, err := NewImporter(context.Background(), bytes.NewReader(data[:cut]), Limits{}, acceptExact)
 		if err != nil {
 			if !errors.Is(err, ErrTruncated) {
 				t.Fatalf("cut %d constructor = %v", cut, err)
@@ -243,7 +243,7 @@ func TestImporterMalformedSequenceLimitsAndSinkFailures(t *testing.T) {
 
 	unknownFrame := append([]byte(nil), data...)
 	unknownFrame[headerLen] = 0x44
-	im, err := NewImporter(bytes.NewReader(unknownFrame), Limits{}, acceptExact)
+	im, err := NewImporter(context.Background(), bytes.NewReader(unknownFrame), Limits{}, acceptExact)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -253,7 +253,7 @@ func TestImporterMalformedSequenceLimitsAndSinkFailures(t *testing.T) {
 
 	badSequence := append([]byte(nil), data...)
 	binary.BigEndian.PutUint64(badSequence[headerLen+1:headerLen+9], 1)
-	im, err = NewImporter(bytes.NewReader(badSequence), Limits{}, acceptExact)
+	im, err = NewImporter(context.Background(), bytes.NewReader(badSequence), Limits{}, acceptExact)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -261,7 +261,7 @@ func TestImporterMalformedSequenceLimitsAndSinkFailures(t *testing.T) {
 		t.Fatalf("sequence = %v", err)
 	}
 
-	im, err = NewImporter(bytes.NewReader(data), Limits{MaxRecords: 1, MaxRecordBytes: 1, MaxTotalBytes: 2}, acceptExact)
+	im, err = NewImporter(context.Background(), bytes.NewReader(data), Limits{MaxRecords: 1, MaxRecordBytes: 1, MaxTotalBytes: 2}, acceptExact)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -273,7 +273,7 @@ func TestImporterMalformedSequenceLimitsAndSinkFailures(t *testing.T) {
 	}
 
 	for _, sink := range []*memorySink{{failBegin: true}, {failCommit: true}, {failWrite: true, failAbort: true}} {
-		im, err := NewImporter(bytes.NewReader(data), Limits{}, acceptExact)
+		im, err := NewImporter(context.Background(), bytes.NewReader(data), Limits{}, acceptExact)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -290,24 +290,24 @@ func TestImporterMalformedSequenceLimitsAndSinkFailures(t *testing.T) {
 func TestImporterArgumentAndHeaderFailures(t *testing.T) {
 	t.Parallel()
 
-	if _, err := NewImporter(nil, Limits{}, acceptExact); !errors.Is(err, ErrInvalid) {
+	if _, err := NewImporter(context.Background(), nil, Limits{}, acceptExact); !errors.Is(err, ErrInvalid) {
 		t.Fatalf("nil reader = %v", err)
 	}
-	if _, err := NewImporter(strings.NewReader(""), Limits{}, nil); !errors.Is(err, ErrInvalid) {
+	if _, err := NewImporter(context.Background(), strings.NewReader(""), Limits{}, nil); !errors.Is(err, ErrInvalid) {
 		t.Fatalf("nil compatibility = %v", err)
 	}
 	data := archiveBytes(t)
 	wrongMagic := append([]byte(nil), data...)
 	wrongMagic[0] ^= 1
-	if _, err := NewImporter(bytes.NewReader(wrongMagic), Limits{}, acceptExact); !errors.Is(err, ErrMalformed) {
+	if _, err := NewImporter(context.Background(), bytes.NewReader(wrongMagic), Limits{}, acceptExact); !errors.Is(err, ErrMalformed) {
 		t.Fatalf("magic = %v", err)
 	}
 	wrongVersion := append([]byte(nil), data...)
 	binary.BigEndian.PutUint16(wrongVersion[8:10], WireVersion+1)
-	if _, err := NewImporter(bytes.NewReader(wrongVersion), Limits{}, acceptExact); !errors.Is(err, ErrIncompatible) {
+	if _, err := NewImporter(context.Background(), bytes.NewReader(wrongVersion), Limits{}, acceptExact); !errors.Is(err, ErrIncompatible) {
 		t.Fatalf("wire version = %v", err)
 	}
-	im, err := NewImporter(bytes.NewReader(data), Limits{}, acceptExact)
+	im, err := NewImporter(context.Background(), bytes.NewReader(data), Limits{}, acceptExact)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -333,12 +333,12 @@ func TestImporterDistinguishesIOFailureFromTruncation(t *testing.T) {
 	t.Parallel()
 
 	data := archiveBytes(t, Record{Kind: "x", Size: 1, Body: strings.NewReader("a")})
-	if _, err := NewImporter(&failAfterReader{r: bytes.NewReader(data), remaining: 5}, Limits{}, acceptExact); !errors.Is(err, ErrIO) || strings.Contains(err.Error(), "secret") {
+	if _, err := NewImporter(context.Background(), &failAfterReader{r: bytes.NewReader(data), remaining: 5}, Limits{}, acceptExact); !errors.Is(err, ErrIO) || strings.Contains(err.Error(), "secret") {
 		t.Fatalf("header I/O = %v", err)
 	}
 	headerLen := len(encodeHeader(testHeader()))
 	prefixLen := len(encodeRecordPrefix(RecordMeta{Kind: "x", Size: 1}))
-	im, err := NewImporter(&failAfterReader{r: bytes.NewReader(data), remaining: headerLen + prefixLen}, Limits{}, acceptExact)
+	im, err := NewImporter(context.Background(), &failAfterReader{r: bytes.NewReader(data), remaining: headerLen + prefixLen}, Limits{}, acceptExact)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -359,13 +359,13 @@ func TestSinkFuncAndCanceledImport(t *testing.T) {
 	if !called {
 		t.Fatal("sink function not called")
 	}
-	im, err := NewImporter(bytes.NewReader(archiveBytes(t)), Limits{}, acceptExact)
+	im, err := NewImporter(context.Background(), bytes.NewReader(archiveBytes(t)), Limits{}, acceptExact)
 	if err != nil {
 		t.Fatal(err)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if _, err := im.Next(ctx, &memorySink{}); !errors.Is(err, context.Canceled) || !errors.Is(err, ErrIO) {
+	if _, err := im.Next(ctx, &memorySink{}); !errors.Is(err, ErrIO) || errors.Is(err, context.Canceled) || !causeIs(err, context.Canceled) {
 		t.Fatalf("canceled next = %v", err)
 	}
 }
@@ -375,14 +375,14 @@ func TestImporterCancellationBetweenPayloadChunksIsIOFailure(t *testing.T) {
 
 	const size = copyBufferBytes + 1
 	data := archiveBytes(t, Record{Kind: "x", Size: size, Body: strings.NewReader(strings.Repeat("x", size))})
-	im, err := NewImporter(bytes.NewReader(data), Limits{}, acceptExact)
+	im, err := NewImporter(context.Background(), bytes.NewReader(data), Limits{}, acceptExact)
 	if err != nil {
 		t.Fatal(err)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	sink := &cancelOnWriteSink{cancel: cancel}
 	_, err = im.Next(ctx, sink)
-	if !errors.Is(err, ErrIO) || !errors.Is(err, context.Canceled) || sink.aborts != 1 {
+	if !errors.Is(err, ErrIO) || errors.Is(err, context.Canceled) || !causeIs(err, context.Canceled) || sink.aborts != 1 {
 		t.Fatalf("mid-payload cancellation = %v, aborts=%d", err, sink.aborts)
 	}
 }
@@ -396,7 +396,7 @@ func TestCheckpointParserClassifications(t *testing.T) {
 	t.Parallel()
 
 	var out bytes.Buffer
-	ex, err := NewExporter(&out, testHeader(), Limits{})
+	ex, err := NewExporter(context.Background(), &out, testHeader(), Limits{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -429,7 +429,7 @@ func TestCheckpointRejectsResignedImpossibleState(t *testing.T) {
 	t.Parallel()
 
 	var out bytes.Buffer
-	ex, err := NewExporter(&out, testHeader(), Limits{})
+	ex, err := NewExporter(context.Background(), &out, testHeader(), Limits{})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -1,6 +1,7 @@
 package portability
 
 import (
+	"context"
 	"encoding/binary"
 	"io"
 )
@@ -56,26 +57,105 @@ func encodeFooter(m Manifest) []byte {
 	return b
 }
 
-// writeExact rejects unexplained short writes.
-// Complexity: delegated time is W(n); local time O(n)+W(n), Omega(1), with
-// tight Theta(n)+W(n) when the writer accepts all n bytes; auxiliary space
-// O(1), Omega(1), tight Theta(1); variable n is len(p).
+// writeExact performs exactly one Writer call and rejects every invalid or
+// unexplained short result. Retrying a positive short nil write would hide a
+// broken callback contract and could duplicate side effects.
+// Complexity: delegated time is W(n); local time O(1)+W(n), Omega(1), tight
+// Theta(1)+W(n); auxiliary space O(1), Omega(1), tight Theta(1).
 func writeExact(w io.Writer, p []byte) (int, error) {
-	written := 0
-	for written < len(p) {
-		n, err := w.Write(p[written:])
-		if n < 0 || n > len(p)-written {
-			return written, io.ErrShortWrite
+	n, err := w.Write(p)
+	if n < 0 || n > len(p) {
+		return 0, io.ErrShortWrite
+	}
+	if err != nil {
+		return n, err
+	}
+	if n != len(p) {
+		return n, io.ErrShortWrite
+	}
+	return n, nil
+}
+
+// writeExactContext brackets the single external Writer call with cancellation
+// checks. A cancellation observed after the call means its outcome may exist,
+// so callers must not advance a committed checkpoint.
+func writeExactContext(ctx context.Context, w io.Writer, p []byte) (int, error) {
+	if err := ctx.Err(); err != nil {
+		return 0, err
+	}
+	n, err := writeExact(w, p)
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return n, ctxErr
+	}
+	return n, err
+}
+
+// readExactContext fills p while validating every Reader result. Legal
+// transient (0, nil) results are bounded to prevent an infinite loop.
+func readExactContext(ctx context.Context, r io.Reader, p []byte) (int, error) {
+	total := 0
+	emptyReads := 0
+	for total < len(p) {
+		if err := ctx.Err(); err != nil {
+			return total, err
 		}
-		written += n
+		n, err := r.Read(p[total:])
+		if n < 0 || n > len(p)-total {
+			return total, io.ErrShortBuffer
+		}
+		if n > 0 {
+			total += n
+			emptyReads = 0
+		} else if err == nil {
+			emptyReads++
+			if emptyReads > MaxConsecutiveEmptyReads {
+				return total, io.ErrNoProgress
+			}
+		}
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return total, ctxErr
+		}
 		if err != nil {
-			return written, err
-		}
-		if n == 0 {
-			return written, io.ErrShortWrite
+			if err == io.EOF && total == len(p) {
+				return total, nil
+			}
+			return total, err
 		}
 	}
-	return written, nil
+	return total, nil
+}
+
+// probeEOFContext requires EOF after tolerating bounded transient empty reads.
+// A positive count is returned to let callers classify trailing data and track
+// physical progress; Reader counts are validated before use.
+func probeEOFContext(ctx context.Context, r io.Reader) (int, error) {
+	var one [1]byte
+	emptyReads := 0
+	for {
+		if err := ctx.Err(); err != nil {
+			return 0, err
+		}
+		n, err := r.Read(one[:])
+		if n < 0 || n > len(one) {
+			return 0, io.ErrShortBuffer
+		}
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return n, ctxErr
+		}
+		if n > 0 {
+			if err != nil && err != io.EOF {
+				return n, err
+			}
+			return n, nil
+		}
+		if err != nil {
+			return 0, err
+		}
+		emptyReads++
+		if emptyReads > MaxConsecutiveEmptyReads {
+			return 0, io.ErrNoProgress
+		}
+	}
 }
 
 // checkedAdd returns a+b and whether unsigned overflow occurred.

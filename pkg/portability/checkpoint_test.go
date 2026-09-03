@@ -12,7 +12,7 @@ func TestCheckpointBinaryRoundTrip(t *testing.T) {
 	t.Parallel()
 
 	var archive bytes.Buffer
-	ex, err := NewExporter(&archive, testHeader(), Limits{})
+	ex, err := NewExporter(context.Background(), &archive, testHeader(), Limits{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -37,7 +37,7 @@ func TestCheckpointRejectsCorruptionAndImpossibleState(t *testing.T) {
 	t.Parallel()
 
 	var archive bytes.Buffer
-	ex, err := NewExporter(&archive, testHeader(), Limits{})
+	ex, err := NewExporter(context.Background(), &archive, testHeader(), Limits{})
 	if err != nil {
 		t.Fatal(err)
 	}

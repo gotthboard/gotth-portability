@@ -25,7 +25,7 @@ func (discardRecord) Abort(context.Context) error  { return nil }
 func TestExternalPackageCanUseCompleteAPI(t *testing.T) {
 	header := portability.Header{WireVersion: portability.WireVersion, ArchiveID: "external", Schema: "consumer", SchemaVersion: 1}
 	var archive bytes.Buffer
-	exporter, err := portability.NewExporter(&archive, header, portability.Limits{})
+	exporter, err := portability.NewExporter(context.Background(), &archive, header, portability.Limits{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -40,11 +40,11 @@ func TestExternalPackageCanUseCompleteAPI(t *testing.T) {
 	if _, err := portability.ParseCheckpoint(encoded, portability.Limits{}); err != nil {
 		t.Fatal(err)
 	}
-	manifest, err := exporter.Finalize()
+	manifest, err := exporter.Finalize(context.Background())
 	if err != nil || manifest.Records != 1 {
 		t.Fatalf("finalize: %#v, %v", manifest, err)
 	}
-	importer, err := portability.NewImporter(bytes.NewReader(archive.Bytes()), portability.Limits{}, func(got portability.Header) error {
+	importer, err := portability.NewImporter(context.Background(), bytes.NewReader(archive.Bytes()), portability.Limits{}, func(_ context.Context, got portability.Header) error {
 		if got.Schema != header.Schema {
 			return errors.New("wrong schema")
 		}

@@ -13,6 +13,7 @@ type Exporter struct {
 	w      io.Writer
 	limits Limits
 	cp     Checkpoint
+	buffer []byte
 	done   bool
 }
 
@@ -20,9 +21,9 @@ type Exporter struct {
 // Complexity: time O(a+s)+W(a+s), Omega(a+s), tight Theta(a+s)+W(a+s) for a
 // successful writer; auxiliary space O(a+s), Omega(a+s), tight Theta(a+s);
 // variables: a and s are identifier lengths; W is delegated writer cost.
-func NewExporter(w io.Writer, header Header, limits Limits) (*Exporter, error) {
-	if w == nil {
-		return nil, wrap(ErrInvalid, "writer", nil)
+func NewExporter(ctx context.Context, w io.Writer, header Header, limits Limits) (*Exporter, error) {
+	if ctx == nil || w == nil {
+		return nil, wrap(ErrInvalid, "context or writer", nil)
 	}
 	if err := header.validate(); err != nil {
 		return nil, err
@@ -32,7 +33,7 @@ func NewExporter(w io.Writer, header Header, limits Limits) (*Exporter, error) {
 		return nil, err
 	}
 	encoded := encodeHeader(header)
-	n, err := writeExact(w, encoded)
+	n, err := writeExactContext(ctx, w, encoded)
 	if err != nil {
 		return nil, wrap(ErrIO, "write header", err)
 	}
@@ -73,12 +74,18 @@ func (e *Exporter) Checkpoint() Checkpoint {
 // WriteRecord streams one exact-length record and returns its committed
 // boundary. Any failure poisons this exporter; resume from the prior checkpoint.
 // Complexity: time O(k+r+n)+R(n)+W(n), Omega(k+r), tight
-// Theta(k+r+n)+R(n)+W(n) on success; auxiliary space O(k+r+B), Omega(k+r),
-// tight Theta(k+r+B) for n>0; variables: k/r metadata lengths, n payload size,
-// B=min(n,32KiB), R/W delegated I/O costs.
+// Theta(k+r+n)+R(n)+W(n) on success. The first non-empty record adds one
+// retained 32KiB buffer; empty and later records add only Theta(k+r) local
+// space. Variables k/r are metadata lengths and n is payload size.
 func (e *Exporter) WriteRecord(ctx context.Context, record Record) (Checkpoint, error) {
 	if e == nil || e.done {
 		return Checkpoint{}, wrap(ErrFinalized, "write record", nil)
+	}
+	if ctx == nil {
+		return Checkpoint{}, wrap(ErrInvalid, "context", nil)
+	}
+	if err := ctx.Err(); err != nil {
+		return Checkpoint{}, wrap(ErrIO, "write record", err)
 	}
 	meta := RecordMeta{Sequence: e.cp.nextSequence, Kind: record.Kind, Key: record.Key, Size: record.Size}
 	if record.Body == nil {
@@ -103,7 +110,7 @@ func (e *Exporter) WriteRecord(ctx context.Context, record Record) (Checkpoint, 
 	if overflow || offsetOverflow {
 		return Checkpoint{}, wrap(ErrLimit, "stream offset", nil)
 	}
-	if _, err := writeExact(e.w, prefix); err != nil {
+	if _, err := writeExactContext(ctx, e.w, prefix); err != nil {
 		e.done = true
 		return Checkpoint{}, wrap(ErrIO, "write record metadata", err)
 	}
@@ -112,7 +119,7 @@ func (e *Exporter) WriteRecord(ctx context.Context, record Record) (Checkpoint, 
 		e.done = true
 		return Checkpoint{}, err
 	}
-	if _, err := writeExact(e.w, digest[:]); err != nil {
+	if _, err := writeExactContext(ctx, e.w, digest[:]); err != nil {
 		e.done = true
 		return Checkpoint{}, wrap(ErrIO, "write record digest", err)
 	}
@@ -126,12 +133,20 @@ func (e *Exporter) WriteRecord(ctx context.Context, record Record) (Checkpoint, 
 
 // copyPayload writes and hashes exactly size bytes, then requires source EOF.
 // Complexity: time O(n)+R(n)+W(n), Omega(1), tight Theta(n)+R(n)+W(n) on
-// success; auxiliary space O(min(n,32KiB)), Omega(1), tight Theta(min(n,32KiB));
+// success; the first non-empty record allocates one 32KiB reusable buffer,
+// while empty records allocate none and later records reuse retained storage;
 // variable n is size and R/W are delegated I/O costs.
 func (e *Exporter) copyPayload(ctx context.Context, src io.Reader, size uint64) ([32]byte, error) {
 	h := sha256.New()
-	buf := make([]byte, copyBufferBytes)
+	var buf []byte
+	if size > 0 {
+		if e.buffer == nil {
+			e.buffer = make([]byte, copyBufferBytes)
+		}
+		buf = e.buffer
+	}
 	remaining := size
+	emptyReads := 0
 	for remaining > 0 {
 		if err := ctx.Err(); err != nil {
 			return [32]byte{}, wrap(ErrIO, "read payload", err)
@@ -141,11 +156,15 @@ func (e *Exporter) copyPayload(ctx context.Context, src io.Reader, size uint64) 
 			want = remaining
 		}
 		n, err := src.Read(buf[:int(want)])
+		if n < 0 || n > int(want) {
+			return [32]byte{}, wrap(ErrIO, "read payload", io.ErrShortBuffer)
+		}
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return [32]byte{}, wrap(ErrIO, "read payload", ctxErr)
+		}
 		if n > 0 {
-			if n > int(want) || uint64(n) > remaining {
-				return [32]byte{}, wrap(ErrInvalid, "payload length", nil)
-			}
-			if _, writeErr := writeExact(e.w, buf[:n]); writeErr != nil {
+			emptyReads = 0
+			if _, writeErr := writeExactContext(ctx, e.w, buf[:n]); writeErr != nil {
 				return [32]byte{}, wrap(ErrIO, "write payload", writeErr)
 			}
 			_, _ = h.Write(buf[:n])
@@ -160,12 +179,14 @@ func (e *Exporter) copyPayload(ctx context.Context, src io.Reader, size uint64) 
 			}
 			return [32]byte{}, wrap(ErrIO, "read payload", err)
 		}
-		if n == 0 {
-			return [32]byte{}, wrap(ErrIO, "read payload", io.ErrNoProgress)
+		if n == 0 && err == nil {
+			emptyReads++
+			if emptyReads > MaxConsecutiveEmptyReads {
+				return [32]byte{}, wrap(ErrIO, "read payload", io.ErrNoProgress)
+			}
 		}
 	}
-	var extra [1]byte
-	n, err := src.Read(extra[:])
+	n, err := probeEOFContext(ctx, src)
 	if n != 0 {
 		return [32]byte{}, wrap(ErrInvalid, "payload length", nil)
 	}
@@ -180,13 +201,19 @@ func (e *Exporter) copyPayload(ctx context.Context, src io.Reader, size uint64) 
 // Finalize writes the final manifest exactly once.
 // Complexity: time O(1)+W(1), Omega(1), tight Theta(1)+W(1); auxiliary space
 // O(1), Omega(1), tight Theta(1); W is one fixed-size delegated write cost.
-func (e *Exporter) Finalize() (Manifest, error) {
+func (e *Exporter) Finalize(ctx context.Context) (Manifest, error) {
 	if e == nil || e.done {
 		return Manifest{}, wrap(ErrFinalized, "finalize", nil)
 	}
+	if ctx == nil {
+		return Manifest{}, wrap(ErrInvalid, "context", nil)
+	}
+	if err := ctx.Err(); err != nil {
+		return Manifest{}, wrap(ErrIO, "finalize", err)
+	}
 	e.done = true
 	manifest := Manifest{Records: e.cp.records, PayloadBytes: e.cp.payloadBytes, Chain: e.cp.chain}
-	if _, err := writeExact(e.w, encodeFooter(manifest)); err != nil {
+	if _, err := writeExactContext(ctx, e.w, encodeFooter(manifest)); err != nil {
 		return Manifest{}, wrap(ErrIO, "write manifest", err)
 	}
 	return manifest, nil

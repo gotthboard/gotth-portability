@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"math"
+	"time"
 	"unicode/utf8"
 )
 
@@ -17,6 +18,12 @@ const (
 	maxKindBytes                 = 128
 	maxKeyBytes                  = 1024
 	copyBufferBytes              = 32 << 10
+	// MaxConsecutiveEmptyReads bounds legal Reader (0, nil) responses before
+	// the operation fails with io.ErrNoProgress.
+	MaxConsecutiveEmptyReads = 100
+	// AbortTimeout bounds best-effort staged-record cleanup after an import
+	// failure. RecordSink.Abort implementations must honor the context deadline.
+	AbortTimeout = 5 * time.Second
 )
 
 // Header identifies one archive and its consumer-owned schema contract.
@@ -59,7 +66,14 @@ type Manifest struct {
 
 // Compatibility validates the consumer-owned schema contract. Returning an
 // error rejects the archive before any record sink is opened.
-type Compatibility func(Header) error
+type Compatibility func(context.Context, Header) error
+
+// Causer exposes a redacted callback or I/O cause without adding that cause to
+// errors.Is traversal. This prevents callback errors from spoofing a library
+// sentinel while preserving explicit diagnostics for callers that need them.
+type Causer interface {
+	Cause() error
+}
 
 // RecordSink stages one imported record. Commit must be idempotent for archive
 // identity and sequence; Abort must discard uncommitted bytes.

@@ -6,6 +6,41 @@ Released sections use Semantic Versioning; unreleased work remains under
 
 ## Unreleased
 
+### 2026-09-03 — Harden cancellation, callback identity, I/O, and allocation
+
+Commit: current commit; hash assigned by Git after commit
+
+Affected files:
+
+- `pkg/portability/**`
+- `README.md`, `docs/architecture.md`, `docs/implementation-spec.md`
+- `docs/runtime-boundary.md`, `docs/performance.md`, `docs/verification.md`
+
+Explanation:
+
+Close independent-review findings by adding contexts to I/O-performing
+constructors and finalization, checking cancellation around all caller-owned
+I/O and callbacks, bounding best-effort abort cleanup, and treating canceled
+commits as unknown outcomes. Callback causes are now available only through
+`Causer` and cannot forge library sentinels through `errors.Is`. Exact-read
+logic validates Reader counts and tolerates a documented finite number of
+transient empty reads; exact writes no longer retry positive short nil results.
+Payload buffers are allocated only for the first non-empty record and reused.
+Fuzz oracles now validate completion state and valid-archive mutations.
+
+Verification:
+
+- focused cancellation, callback-spoofing, I/O-contract, and allocation tests
+- full format, vet, build, race, coverage, fuzz, and benchmark gates pending on
+  the resulting exact source commit
+
+Risks / non-goals:
+
+- This deliberately changes the unreleased Go API; there is no released caller
+  compatibility contract to preserve.
+- No consumer schema or downstream integration was invented. Workflow remains
+  `in_progress`, and no release or admission is claimed.
+
 ### 2026-09-03 14:20 CDT — Bind the external-consumer proof
 
 Commit: current commit; hash assigned by Git after commit

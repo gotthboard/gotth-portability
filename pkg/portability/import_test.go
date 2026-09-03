@@ -64,7 +64,7 @@ func (s *memoryRecordSink) Abort(context.Context) error {
 func archiveBytes(t *testing.T, records ...Record) []byte {
 	t.Helper()
 	var out bytes.Buffer
-	ex, err := NewExporter(&out, testHeader(), Limits{})
+	ex, err := NewExporter(context.Background(), &out, testHeader(), Limits{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -73,13 +73,13 @@ func archiveBytes(t *testing.T, records ...Record) []byte {
 			t.Fatal(err)
 		}
 	}
-	if _, err := ex.Finalize(); err != nil {
+	if _, err := ex.Finalize(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 	return append([]byte(nil), out.Bytes()...)
 }
 
-func acceptExact(header Header) error {
+func acceptExact(_ context.Context, header Header) error {
 	if header.Schema != "example" || header.SchemaVersion != 7 {
 		return errors.New("unsupported")
 	}
@@ -93,7 +93,7 @@ func TestImporterRoundTripAndCompletenessOracle(t *testing.T) {
 		Record{Kind: "post", Key: "1", Size: 3, Body: strings.NewReader("one")},
 		Record{Kind: "post", Key: "2", Size: 3, Body: strings.NewReader("two")},
 	)
-	im, err := NewImporter(bytes.NewReader(data), Limits{}, acceptExact)
+	im, err := NewImporter(context.Background(), bytes.NewReader(data), Limits{}, acceptExact)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -128,7 +128,7 @@ func TestImporterRejectsBeforeOrInsteadOfCommit(t *testing.T) {
 	data := archiveBytes(t, Record{Kind: "post", Key: "1", Size: 3, Body: strings.NewReader("one")})
 	t.Run("compatibility before sink", func(t *testing.T) {
 		begins := 0
-		_, err := NewImporter(bytes.NewReader(data), Limits{}, func(Header) error {
+		_, err := NewImporter(context.Background(), bytes.NewReader(data), Limits{}, func(context.Context, Header) error {
 			return errors.New("schema-secret")
 		})
 		if !errors.Is(err, ErrIncompatible) || strings.Contains(err.Error(), "secret") {
@@ -144,7 +144,7 @@ func TestImporterRejectsBeforeOrInsteadOfCommit(t *testing.T) {
 		headerLen := len(encodeHeader(testHeader()))
 		prefixLen := len(encodeRecordPrefix(RecordMeta{Sequence: 0, Kind: "post", Key: "1", Size: 3}))
 		corrupt[headerLen+prefixLen] ^= 0xff
-		im, err := NewImporter(bytes.NewReader(corrupt), Limits{}, acceptExact)
+		im, err := NewImporter(context.Background(), bytes.NewReader(corrupt), Limits{}, acceptExact)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -158,7 +158,7 @@ func TestImporterRejectsBeforeOrInsteadOfCommit(t *testing.T) {
 	})
 
 	t.Run("sink error is redacted", func(t *testing.T) {
-		im, err := NewImporter(bytes.NewReader(data), Limits{}, acceptExact)
+		im, err := NewImporter(context.Background(), bytes.NewReader(data), Limits{}, acceptExact)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -184,7 +184,7 @@ func TestImporterRejectsTruncationTrailingDataAndManifestCorruption(t *testing.T
 		{name: "manifest", data: func() []byte { b := append([]byte(nil), data...); b[len(b)-1] ^= 1; return b }(), want: ErrIntegrity},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			im, err := NewImporter(bytes.NewReader(tc.data), Limits{}, acceptExact)
+			im, err := NewImporter(context.Background(), bytes.NewReader(tc.data), Limits{}, acceptExact)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -206,7 +206,7 @@ func TestImporterResumeAtCheckpoint(t *testing.T) {
 		Record{Kind: "x", Key: "1", Size: 1, Body: strings.NewReader("a")},
 		Record{Kind: "x", Key: "2", Size: 1, Body: strings.NewReader("b")},
 	)
-	im, err := NewImporter(bytes.NewReader(data), Limits{}, acceptExact)
+	im, err := NewImporter(context.Background(), bytes.NewReader(data), Limits{}, acceptExact)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -215,7 +215,7 @@ func TestImporterResumeAtCheckpoint(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	resumed, err := ResumeImporter(bytes.NewReader(data[cp.Offset():]), cp, Limits{}, acceptExact)
+	resumed, err := ResumeImporter(context.Background(), bytes.NewReader(data[cp.Offset():]), cp, Limits{}, acceptExact)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -233,7 +233,7 @@ func TestImporterResumeAtCheckpoint(t *testing.T) {
 func TestImporterEmptyArchive(t *testing.T) {
 	t.Parallel()
 
-	im, err := NewImporter(bytes.NewReader(archiveBytes(t)), Limits{}, acceptExact)
+	im, err := NewImporter(context.Background(), bytes.NewReader(archiveBytes(t)), Limits{}, acceptExact)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -289,7 +289,7 @@ func TestImporterInitialCheckpointRecoversUnknownCommitOutcome(t *testing.T) {
 	t.Parallel()
 
 	data := archiveBytes(t, Record{Kind: "x", Size: 3, Body: strings.NewReader("abc")})
-	im, err := NewImporter(bytes.NewReader(data), Limits{}, acceptExact)
+	im, err := NewImporter(context.Background(), bytes.NewReader(data), Limits{}, acceptExact)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -304,7 +304,7 @@ func TestImporterInitialCheckpointRecoversUnknownCommitOutcome(t *testing.T) {
 	if im.Checkpoint() != initial {
 		t.Fatal("unknown outcome advanced importer checkpoint")
 	}
-	resumed, err := ResumeImporter(bytes.NewReader(data[initial.Offset():]), initial, Limits{}, acceptExact)
+	resumed, err := ResumeImporter(context.Background(), bytes.NewReader(data[initial.Offset():]), initial, Limits{}, acceptExact)
 	if err != nil {
 		t.Fatal(err)
 	}

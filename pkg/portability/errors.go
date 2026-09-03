@@ -34,16 +34,15 @@ func (e *classifiedError) Error() string {
 	return e.class.Error() + ": " + e.op
 }
 
-// Unwrap returns both stable classification and programmatic cause without
-// incorporating cause text in Error.
+// Unwrap returns only the stable library classification. Callback and I/O
+// causes are deliberately excluded from errors.Is traversal.
 // Complexity: time O(1), Omega(1), tight Theta(1); auxiliary space O(1),
 // Omega(1), tight Theta(1).
-func (e *classifiedError) Unwrap() []error {
-	if e.cause == nil {
-		return []error{e.class}
-	}
-	return []error{e.class, e.cause}
-}
+func (e *classifiedError) Unwrap() error { return e.class }
+
+// Cause returns the redacted underlying callback or I/O error explicitly.
+// Complexity: time and auxiliary space O(1), Omega(1), tight Theta(1).
+func (e *classifiedError) Cause() error { return e.cause }
 
 // wrap creates a redaction-safe classified error.
 // Complexity: time O(1), Omega(1), tight Theta(1); auxiliary space O(1),

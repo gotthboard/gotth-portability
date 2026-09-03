@@ -55,7 +55,7 @@ func runPerfRoundTrip(workload perfWorkload) error {
 	total := workload.payload * uint64(workload.records)
 	limits := Limits{MaxRecords: uint64(workload.records) + 1, MaxRecordBytes: max64(workload.payload, 1), MaxTotalBytes: max64(total, 1)}
 	var archive bytes.Buffer
-	ex, err := NewExporter(&archive, header, limits)
+	ex, err := NewExporter(context.Background(), &archive, header, limits)
 	if err != nil {
 		return err
 	}
@@ -64,10 +64,10 @@ func runPerfRoundTrip(workload perfWorkload) error {
 			return err
 		}
 	}
-	if _, err := ex.Finalize(); err != nil {
+	if _, err := ex.Finalize(context.Background()); err != nil {
 		return err
 	}
-	im, err := NewImporter(bytes.NewReader(archive.Bytes()), limits, func(Header) error { return nil })
+	im, err := NewImporter(context.Background(), bytes.NewReader(archive.Bytes()), limits, func(context.Context, Header) error { return nil })
 	if err != nil {
 		return err
 	}
@@ -112,18 +112,80 @@ func (performanceRecord) Write(p []byte) (int, error)  { return len(p), nil }
 func (performanceRecord) Commit(context.Context) error { return nil }
 func (performanceRecord) Abort(context.Context) error  { return nil }
 
+var allocationWorkloads = []perfWorkload{
+	{name: "zero-records", records: 0, payload: 0},
+	{name: "one-empty", records: 1, payload: 0},
+	{name: "1000-empty", records: 1000, payload: 0},
+	{name: "1x1KiB", records: 1, payload: 1 << 10},
+	{name: "1x1MiB", records: 1, payload: 1 << 20},
+	{name: "1x16MiB", records: 1, payload: 16 << 20},
+}
+
+func benchmarkLimits(workload perfWorkload) Limits {
+	total := uint64(workload.records) * workload.payload
+	return Limits{MaxRecords: uint64(workload.records) + 1, MaxRecordBytes: max64(workload.payload, 1), MaxTotalBytes: max64(total, 1)}
+}
+
 func BenchmarkExport(b *testing.B) {
-	for _, size := range []uint64{0, 1 << 10, 1 << 20, 16 << 20} {
-		b.Run(fmt.Sprintf("payload-%d", size), func(b *testing.B) {
+	for _, workload := range allocationWorkloads {
+		b.Run(workload.name, func(b *testing.B) {
+			b.ReportAllocs()
+			b.SetBytes(int64(workload.records) * int64(workload.payload))
+			limits := benchmarkLimits(workload)
 			for b.Loop() {
-				ex, err := NewExporter(io.Discard, testHeader(), Limits{MaxRecords: 1, MaxRecordBytes: max64(size, 1), MaxTotalBytes: max64(size, 1)})
+				ex, err := NewExporter(context.Background(), io.Discard, testHeader(), limits)
 				if err != nil {
 					b.Fatal(err)
 				}
-				if _, err := ex.WriteRecord(context.Background(), Record{Kind: "x", Size: size, Body: &repeatedByteReader{remaining: size}}); err != nil {
+				for record := 0; record < workload.records; record++ {
+					if _, err := ex.WriteRecord(context.Background(), Record{Kind: "x", Size: workload.payload, Body: &repeatedByteReader{remaining: workload.payload}}); err != nil {
+						b.Fatal(err)
+					}
+				}
+				if _, err := ex.Finalize(context.Background()); err != nil {
 					b.Fatal(err)
 				}
-				if _, err := ex.Finalize(); err != nil {
+			}
+		})
+	}
+}
+
+func BenchmarkImport(b *testing.B) {
+	for _, workload := range allocationWorkloads {
+		b.Run(workload.name, func(b *testing.B) {
+			limits := benchmarkLimits(workload)
+			var archive bytes.Buffer
+			ex, err := NewExporter(context.Background(), &archive, testHeader(), limits)
+			if err != nil {
+				b.Fatal(err)
+			}
+			for record := 0; record < workload.records; record++ {
+				if _, err := ex.WriteRecord(context.Background(), Record{Kind: "x", Size: workload.payload, Body: &repeatedByteReader{remaining: workload.payload}}); err != nil {
+					b.Fatal(err)
+				}
+			}
+			if _, err := ex.Finalize(context.Background()); err != nil {
+				b.Fatal(err)
+			}
+			data := archive.Bytes()
+			b.ReportAllocs()
+			b.SetBytes(int64(workload.records) * int64(workload.payload))
+			b.ResetTimer()
+			for b.Loop() {
+				im, err := NewImporter(context.Background(), bytes.NewReader(data), limits, func(context.Context, Header) error { return nil })
+				if err != nil {
+					b.Fatal(err)
+				}
+				for {
+					_, err = im.Next(context.Background(), performanceSink{})
+					if errors.Is(err, ErrComplete) {
+						break
+					}
+					if err != nil {
+						b.Fatal(err)
+					}
+				}
+				if _, err := im.Manifest(); err != nil {
 					b.Fatal(err)
 				}
 			}

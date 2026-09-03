@@ -5,6 +5,11 @@ import (
 	"testing"
 )
 
+func causeIs(err, target error) bool {
+	var causer Causer
+	return errors.As(err, &causer) && errors.Is(causer.Cause(), target)
+}
+
 func TestLimitsNormalizeAndValidate(t *testing.T) {
 	t.Parallel()
 
@@ -54,7 +59,11 @@ func TestClassifiedErrorDoesNotExposeCauseText(t *testing.T) {
 	if got := err.Error(); got != "portability: malformed stream: read record" {
 		t.Fatalf("error text = %q", got)
 	}
-	if !errors.Is(err, ErrMalformed) || !errors.Is(err, secret) {
+	if !errors.Is(err, ErrMalformed) || errors.Is(err, secret) {
 		t.Fatalf("classification lost: %v", err)
+	}
+	var causer Causer
+	if !errors.As(err, &causer) || !errors.Is(causer.Cause(), secret) {
+		t.Fatalf("explicit cause unavailable: %v", err)
 	}
 }

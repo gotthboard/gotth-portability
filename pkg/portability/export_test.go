@@ -13,11 +13,11 @@ func TestWireV1EmptyArchiveGolden(t *testing.T) {
 	t.Parallel()
 
 	var out bytes.Buffer
-	ex, err := NewExporter(&out, testHeader(), Limits{})
+	ex, err := NewExporter(context.Background(), &out, testHeader(), Limits{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := ex.Finalize(); err != nil {
+	if _, err := ex.Finalize(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 	want, err := hex.DecodeString(
@@ -37,7 +37,7 @@ func TestWireV1RecordAndCheckpointGolden(t *testing.T) {
 	t.Parallel()
 
 	var out bytes.Buffer
-	ex, err := NewExporter(&out, testHeader(), Limits{})
+	ex, err := NewExporter(context.Background(), &out, testHeader(), Limits{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -49,7 +49,7 @@ func TestWireV1RecordAndCheckpointGolden(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := ex.Finalize(); err != nil {
+	if _, err := ex.Finalize(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 	wantArchive, err := hex.DecodeString(
@@ -92,7 +92,7 @@ func TestExporterWritesEmptyAndMultiRecordArchives(t *testing.T) {
 		{{Kind: "post", Key: "1", Size: 3, Body: strings.NewReader("one")}, {Kind: "blob", Key: "2", Size: 0, Body: strings.NewReader("")}},
 	} {
 		var out bytes.Buffer
-		ex, err := NewExporter(&out, testHeader(), Limits{})
+		ex, err := NewExporter(context.Background(), &out, testHeader(), Limits{})
 		if err != nil {
 			t.Fatalf("new exporter: %v", err)
 		}
@@ -101,14 +101,14 @@ func TestExporterWritesEmptyAndMultiRecordArchives(t *testing.T) {
 				t.Fatalf("write record: %v", err)
 			}
 		}
-		manifest, err := ex.Finalize()
+		manifest, err := ex.Finalize(context.Background())
 		if err != nil {
 			t.Fatalf("finalize: %v", err)
 		}
 		if manifest.Records != uint64(len(records)) || out.Len() == 0 {
 			t.Fatalf("manifest/output = %#v/%d", manifest, out.Len())
 		}
-		if _, err := ex.Finalize(); !errors.Is(err, ErrFinalized) {
+		if _, err := ex.Finalize(context.Background()); !errors.Is(err, ErrFinalized) {
 			t.Fatalf("second finalize = %v, want ErrFinalized", err)
 		}
 	}
@@ -130,7 +130,7 @@ func TestExporterRejectsShortLongAndOverLimitBodies(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var out bytes.Buffer
-			ex, err := NewExporter(&out, testHeader(), tc.limits)
+			ex, err := NewExporter(context.Background(), &out, testHeader(), tc.limits)
 			if err != nil {
 				t.Fatalf("new exporter: %v", err)
 			}
@@ -156,7 +156,7 @@ func TestExporterResumeMatchesUninterruptedArchive(t *testing.T) {
 		{Kind: "two", Key: "b", Size: 6, Body: strings.NewReader("second")},
 	}
 	var uninterrupted bytes.Buffer
-	full, err := NewExporter(&uninterrupted, testHeader(), Limits{})
+	full, err := NewExporter(context.Background(), &uninterrupted, testHeader(), Limits{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -165,12 +165,12 @@ func TestExporterResumeMatchesUninterruptedArchive(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if _, err := full.Finalize(); err != nil {
+	if _, err := full.Finalize(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 
 	var resumed bytes.Buffer
-	first, err := NewExporter(&resumed, testHeader(), Limits{})
+	first, err := NewExporter(context.Background(), &resumed, testHeader(), Limits{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -188,7 +188,7 @@ func TestExporterResumeMatchesUninterruptedArchive(t *testing.T) {
 	if _, err := continued.WriteRecord(context.Background(), Record{Kind: "two", Key: "b", Size: 6, Body: strings.NewReader("second")}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := continued.Finalize(); err != nil {
+	if _, err := continued.Finalize(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 	if !bytes.Equal(resumed.Bytes(), uninterrupted.Bytes()) {
@@ -222,7 +222,7 @@ func TestExporterInitialCheckpointRecoversFirstRecordFailure(t *testing.T) {
 
 	prefix := encodeRecordPrefix(RecordMeta{Sequence: 0, Kind: "x", Size: 3})
 	target := &cutoffBuffer{remaining: len(encodeHeader(testHeader())) + len(prefix) + 1}
-	ex, err := NewExporter(target, testHeader(), Limits{})
+	ex, err := NewExporter(context.Background(), target, testHeader(), Limits{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -245,7 +245,7 @@ func TestExporterInitialCheckpointRecoversFirstRecordFailure(t *testing.T) {
 	if _, err := resumed.WriteRecord(context.Background(), Record{Kind: "x", Size: 3, Body: strings.NewReader("abc")}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := resumed.Finalize(); err != nil {
+	if _, err := resumed.Finalize(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 	want := archiveBytes(t, Record{Kind: "x", Size: 3, Body: strings.NewReader("abc")})

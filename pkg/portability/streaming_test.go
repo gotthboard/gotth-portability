@@ -52,14 +52,14 @@ func TestLargePayloadUsesBoundedWrites(t *testing.T) {
 
 	const size = uint64(5<<20 + 17)
 	archive := &maxWriteRecorder{}
-	ex, err := NewExporter(archive, testHeader(), Limits{MaxRecordBytes: size, MaxTotalBytes: size})
+	ex, err := NewExporter(context.Background(), archive, testHeader(), Limits{MaxRecordBytes: size, MaxTotalBytes: size})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err := ex.WriteRecord(context.Background(), Record{Kind: "large", Size: size, Body: &repeatedByteReader{remaining: size}}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := ex.Finalize(); err != nil {
+	if _, err := ex.Finalize(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 	if archive.max > copyBufferBytes {
@@ -67,17 +67,17 @@ func TestLargePayloadUsesBoundedWrites(t *testing.T) {
 	}
 
 	var encoded bytes.Buffer
-	ex, err = NewExporter(&encoded, testHeader(), Limits{MaxRecordBytes: size, MaxTotalBytes: size})
+	ex, err = NewExporter(context.Background(), &encoded, testHeader(), Limits{MaxRecordBytes: size, MaxTotalBytes: size})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err := ex.WriteRecord(context.Background(), Record{Kind: "large", Size: size, Body: &repeatedByteReader{remaining: size}}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := ex.Finalize(); err != nil {
+	if _, err := ex.Finalize(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	im, err := NewImporter(bytes.NewReader(encoded.Bytes()), Limits{MaxRecordBytes: size, MaxTotalBytes: size}, acceptExact)
+	im, err := NewImporter(context.Background(), bytes.NewReader(encoded.Bytes()), Limits{MaxRecordBytes: size, MaxTotalBytes: size}, acceptExact)
 	if err != nil {
 		t.Fatal(err)
 	}
