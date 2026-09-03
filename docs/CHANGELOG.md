@@ -8,8 +8,8 @@ Released sections use Semantic Versioning; unreleased work remains under
 
 ### 2026-09-03 — Complete independent post-repair findings
 
-Implementation commit: current commit; hash assigned by Git after commit.
-Evidence: pending until the exact implementation commit exists.
+Implementation commit: `95edd8269173a7d580d2ab0a9ecf3560c4c2b5ce`.
+Evidence commit: this documentation-only commit.
 
 Affected files:
 
@@ -29,8 +29,10 @@ implementation commit is fixed.
 Verification:
 
 - focused raw-cause, begin-cleanup, cleanup-deadline, and fuzz-oracle tests pass
-- full revision-matched gates and traced external proofs will be rerun against
-  the exact implementation commit before evidence is marked complete
+- full format/diff/vet/build/race, 92.9% coverage, race x50, four sequential
+  five-second fuzz targets, performance/allocation matrix, traced clean-clone
+  and external-consumer proofs, and revision-bound Graphify pass against exact
+  implementation `95edd82`; hashes and commands are recorded in feature evidence
 
 Risks / non-goals:
 

@@ -42,11 +42,11 @@ correctness evidence only and are not mixed into the timing table.
 
 | Workload | Samples | p50 | p95 | p99 | Throughput |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| empty archive | 200 | 21.513 us | 60.717 us | 99.858 us | 39,150.83 archives/s |
-| 1 x 1 KiB | 200 | 233.357 us | 2.391773 ms | 4.650010 ms | 1,924.81 archives/s |
-| 16 x 64 KiB | 80 | 103.504176 ms | 142.988999 ms | 414.831252 ms | 9.32 archives/s |
-| 4 x 1 MiB | 20 | 260.857682 ms | 336.272056 ms | 339.849309 ms | 3.74 archives/s |
-| 1,000 empty records | 10 | 22.927828 ms | 27.363032 ms | 27.363032 ms | 42.24 archives/s |
+| empty archive | 200 | 2.530 us | 4.629 us | 17.588 us | 290,493.32 archives/s |
+| 1 x 1 KiB | 200 | 14.537 us | 33.291 us | 295.801 us | 44,888.83 archives/s |
+| 16 x 64 KiB | 80 | 6.314986 ms | 9.934548 ms | 10.652104 ms | 143.42 archives/s |
+| 4 x 1 MiB | 20 | 29.722832 ms | 33.968614 ms | 34.256288 ms | 33.91 archives/s |
+| 1,000 empty records | 10 | 2.336678 ms | 2.665702 ms | 2.665702 ms | 419.53 archives/s |
 
 The 1,000-empty-record workload isolates per-frame overhead and is the
 pathological metadata regime. The large workloads show the expected linear
@@ -59,10 +59,10 @@ objective.
 | --- | ---: | ---: |
 | zero records | 304, 3 | 544, 21 |
 | one empty record | 440, 9 | 776, 35 |
-| 1,000 empty records | 136,304, 6,003 | 232,544-232,546, 14,021 |
+| 1,000 empty records | 136,304, 6,003 | 232,544-232,548, 14,021 |
 | 1 x 1 KiB | 33,208, 10 | 33,544, 36 |
 | 1 x 1 MiB | 33,208-33,209, 10 | 33,544, 36 |
-| 1 x 16 MiB | 33,208-33,224, 10 | 33,544, 36 |
+| 1 x 16 MiB | 33,208-33,209, 10 | 33,544, 36 |
 
 The zero- and empty-record rows prove that no unconditional 32 KiB payload
 buffer remains. The 1,000-empty-record case shows linear metadata/hash
@@ -70,9 +70,9 @@ allocation rather than hidden 32 KiB-per-record churn. Non-empty allocation is
 flat across payload size because one buffer is retained and reused. This does
 not claim that per-record metadata allocations are free or optimal.
 
-Timing is much slower and noisier than the superseded pre-review run, reflecting
-an uncontrolled shared host. No CPU profile, scheduler isolation, or hardware
-counter evidence was collected because there is no runtime speedup claim.
-Allocation counts and asymptotic byte work are the stable evidence. Re-run
-against real consumer distributions before setting an SLO or changing the
-mechanism.
+Timing differs drastically from the immediately superseded review run despite
+unchanged success-path mechanics, demonstrating that this shared host is
+uncontrolled. No CPU profile, scheduler isolation, or hardware counter evidence
+was collected because there is no runtime speedup claim. Allocation counts and
+asymptotic byte work are the stable evidence. Re-run against real consumer
+distributions before setting an SLO or changing the mechanism.

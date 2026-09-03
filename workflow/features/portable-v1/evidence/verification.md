@@ -8,6 +8,8 @@
 - First hardened source commit: `5a291d9752839333ba033005b21c80686836b9e3`.
 - Independent-review hardening commit:
   `5ec6f2f759078fa7fe894f99ff1c245a6c67e6f4`.
+- Post-repair hardening commit:
+  `95edd8269173a7d580d2ab0a9ecf3560c4c2b5ce`.
 - Branch/worktree: `feature/v1-portability` at
   `/tmp/gotth-portability-worktrees/v1-portability`.
 - No push, PR, tag, release, deployment, live database, secret, or remote state
@@ -21,8 +23,11 @@ and release policy remain consumer-owned. Import sinks stage one record and
 commit only after digest verification. Sink commit errors have unknown outcome;
 consumers must reconcile and make commit idempotent by archive ID and sequence.
 Cancellation observed after `Commit` is the same unknown outcome. Pre-commit
-failure uses a fresh cleanup context bounded by `AbortTimeout`. SHA-256 provides
-integrity, not producer authentication.
+failure uses a fresh cleanup context bounded by `AbortTimeout`. A stage returned
+with a Begin error is cleaned up, and cleanup deadline expiry is an `ErrSink`
+failure even after a nil Abort result. SHA-256 provides integrity, not producer
+authentication. `Causer.Cause` is raw and potentially sensitive; only `Error()`
+is redaction-safe.
 
 ## Toolchain and capacity
 
@@ -43,7 +48,7 @@ Passed locally:
 git diff --check -- .
 go vet -mod=readonly ./...
 go build -mod=readonly ./...
-go test -mod=readonly -race -coverprofile=/tmp/gotth-portability-coverage-5ec6f2f.out ./...
+go test -mod=readonly -race -coverprofile=/tmp/gotth-portability-coverage-95edd82.out ./...
 go test -mod=readonly -race -count=50 ./...
 ```
 
@@ -53,15 +58,17 @@ resume, external-package, and bounded-write tests pass. New tests bracket every
 caller-owned cancellation seam, enforce a finite no-progress bound and strict
 Writer contract, verify lazy/reused payload buffers, and inject every public
 sentinel through every callback class to prove causes cannot spoof
-`errors.Is`. Residual lines are defensive variants within already-covered
-classifications.
+`errors.Is`. Begin stage-plus-error cleanup and both nil/error returns after a
+cleanup deadline have direct tests. Exact-valid fuzz seeds require the commit
+entry even for empty payload. Residual lines are defensive variants within
+already-covered classifications.
 
 Fresh five-second fuzz runs:
 
-- archive roundtrip: 100,791 executions;
-- checkpoint parser: 90,176 executions;
-- bounded arbitrary archive: 252,625 executions;
-- valid-archive mutation oracle: 44,769 executions.
+- archive roundtrip: 182,220 executions;
+- checkpoint parser: 241,957 executions;
+- bounded arbitrary archive: 314,127 executions;
+- valid-archive mutation oracle: 83,297 executions.
 
 Exact commands:
 
@@ -72,11 +79,10 @@ go test -mod=readonly -run '^$' -fuzz '^FuzzArbitraryArchiveTerminatesWithinReco
 go test -mod=readonly -run '^$' -fuzz '^FuzzValidArchiveMutationOracle$' -fuzztime=5s ./pkg/portability
 ```
 
-Four simultaneous fuzz processes produced one harness EOF while gathering the
-arbitrary-archive baseline. That target was rerun alone and passed; the retained
-artifact is the passing sequential run. `ErrComplete` is no longer treated as a
-generic successful error: both fuzz oracles require an available, consistent
-manifest and expected committed output.
+All four final runs were sequential. `ErrComplete` is not treated as a generic
+successful error: exact-valid oracles require one commit, map membership, exact
+bytes, zero aborts, counts, digest-derived rolling chain, Manifest, and EOF.
+Invalid mutation classes assert no forbidden commit, completion, or Manifest.
 
 ## External consumer
 
@@ -85,11 +91,13 @@ detached at the exact hardened source and passed race, vet, and build. It
 constructs exporter/importer, persists/parses a checkpoint, implements the
 staged sink interfaces, and observes explicit completion. The no-local clone
 itself passed readonly race, vet, and build with a clean detached status. Both
-temporary directories are disposable. The final proof log prints and hashes
-the external module files, resolves the replacement path, records the replaced
-repository's exact detached HEAD and clean status, prints `go list -m -json
-all`, and traces race, vet, and build. Result logs are retained and hashed
-below.
+temporary directories are disposable. Both final proof logs print each command
+before execution and an explicit exit status afterward. The clean-clone log
+records detached exact HEAD, clean porcelain-v2 status, source/module hashes,
+and race/vet/build. The external log prints and hashes its module files, hashes
+the replaced source, resolves `go.mod` replacement with `go list -m -json all`,
+records exact detached/clean source, and traces race/vet/build. Result logs are
+retained and hashed below.
 
 ## Performance evidence
 
@@ -112,37 +120,38 @@ The harness reported `GOMAXPROCS=4`; each export benchmark operation is serial.
 
 Worker review also split `ErrIO` from `ErrMalformed` and `ErrTruncated`.
 Independent review then found that callback causes could counterfeit public
-sentinels. `errors.Is` now exposes only the library classification; `Causer`
-provides explicit access while consumer error text remains absent.
+sentinels. `errors.Is` now exposes only the library classification. `Causer`
+provides explicit access to the unchanged raw cause, which may be sensitive and
+must be consumer-redacted before logging or display; public `Error()` text
+remains redaction-safe.
 
 | Revision-matched external artifact | SHA-256 |
 | --- | --- |
-| `/tmp/gotth-portability-verify-5ec6f2f.log` | `23e80afd43805dc883a355e83e58ea78556356707e1b8422225994f9d74c5064` |
-| `/tmp/gotth-portability-coverage-5ec6f2f.out` | `6d133be7ecf6d6ddaf320cb2c5b0347f2f8e02e98c9270655b473fe5f2336c93` |
-| `/tmp/gotth-portability-race50-5ec6f2f.log` | `56cdbf494ccafd8535ca1febc8628719039a5341849d606bd5bb464a13d75792` |
-| `/tmp/gotth-portability-fuzz-roundtrip-5ec6f2f.log` | `ec240d37578d3031a22485d423670b46374984c3194f200b2cc8d1fbc344e77f` |
-| `/tmp/gotth-portability-fuzz-checkpoint-5ec6f2f.log` | `0e90723140a541fb19f7828fe946414321a76feb94067818e16a5f5e577b0c0a` |
-| `/tmp/gotth-portability-fuzz-arbitrary-5ec6f2f.log` | `596206e2c046674eb0742bae96f4c1dec78eb1890ac1bb056a08fd0fdfa02b01` |
-| `/tmp/gotth-portability-fuzz-mutation-5ec6f2f.log` | `91616219d2b83dd53f6702b7fe9ac631903bdf37ca59195cdafee33797233439` |
-| `/tmp/gotth-portability-performance-5ec6f2f.log` | `5bf1acd2e66a3e75b8031050660c6f88392df0132802bd6ece697b91bc1b3f53` |
-| `/tmp/gotth-portability-bench-5ec6f2f.log` | `de7a4579e68bad8f117fe52f233f2435104e7d535ccf725d51755b6a5755c84f` |
-| `/tmp/gotth-portability-clean-clone-5ec6f2f.log` | `4a8b57cfd27c45a479764b6047ae1fb0d1ac6aa9169aeaf9636e8a154988b533` |
-| `/tmp/gotth-portability-external-proof-5ec6f2f.log` | `76e5ddafa021c7904275812751d2ebf546a27a9c69c0361812def81f9168f0c6` |
+| `/tmp/gotth-portability-verify-95edd82.log` | `bea481c7178b05d751373ee0afedbdbcdc601c0f98ba28fc347066e23756edb8` |
+| `/tmp/gotth-portability-coverage-95edd82.out` | `7a04d9d1e4b801f7f4a82ba208ffda9499bb2c8b3f0e06ddefda44596dfb6cff` |
+| `/tmp/gotth-portability-race50-95edd82.log` | `e5f44023a3bbfc02e16d38545ea94aa1368f3d0e187db469f9c3a53a8a748cd4` |
+| `/tmp/gotth-portability-fuzz-roundtrip-95edd82.log` | `265e24f048249c6f01cfc4356601462b089f289cd806a48bf424c0e2e351c643` |
+| `/tmp/gotth-portability-fuzz-checkpoint-95edd82.log` | `1be4c5ecb258327db0ff915f6b7068633c61378750c4113d46f112f11847c7d5` |
+| `/tmp/gotth-portability-fuzz-arbitrary-95edd82.log` | `eec3eab2e1d3766c74983e2d4c29d215b4aed2767c1d3d6006ca44308a7cbfdd` |
+| `/tmp/gotth-portability-fuzz-mutation-95edd82.log` | `f019c198143ae29e725c4d920e8ce41d5d48c639ae8b41bea43f80d4a3de5be3` |
+| `/tmp/gotth-portability-performance-95edd82.log` | `fa6a3911cd550d7c93d89a1f82834ca1a8e5e687ac82f6d9301a9936597e9e1c` |
+| `/tmp/gotth-portability-bench-95edd82.log` | `87ad1a173e5987617c19276f207b1eba47da6edcee86af94c5197ec59b3f8283` |
+| `/tmp/gotth-portability-clean-clone-95edd82.log` | `25513e847c2edba6c043248ca11e7ab3815cdd11b94c8a2203d6533a8a05fd53` |
+| `/tmp/gotth-portability-external-proof-95edd82.log` | `d82f4f5f18d790f819a6f572dc01aefd0ad2f309e984a783826056c0c8ee918b` |
 
 ## Graph review
 
 Graphify extracted hardened source commit
-`5ec6f2f759078fa7fe894f99ff1c245a6c67e6f4` in code-only mode: 263 nodes,
-636 edges, and 13 communities. It skipped 17 non-code documents and six
+`95edd8269173a7d580d2ab0a9ecf3560c4c2b5ce` in code-only mode: 274 nodes,
+677 edges, and 14 communities. It skipped 17 non-code documents and six
 unclassified non-code files. The graph is at
-`~/.cache/openclaw-graphify/gotth-portability/5ec6f2f759078fa7fe894f99ff1c245a6c67e6f4/graphify-out/graph.json`
+`~/.cache/openclaw-graphify/gotth-portability/95edd8269173a7d580d2ab0a9ecf3560c4c2b5ce/graphify-out/graph.json`
 with SHA-256
-`a3835b40f1a78ff299a01b66b5dda001d1bd9e9eb47057fcbca3a81df68eb101`.
-Graph queries show `NewExporter` reaches `writeExactContext`, while
-`NewImporter` reaches `readHeader`, `readExact`, and `readExactContext`.
-Source confirms those consequential edges. The graph contains no self-loop or
-exact duplicate edge. Graph output is iteration evidence, not correctness or
-admission.
+`1a4f3a55caa75b20b30ba63f40f7a566f2d09d2d240af1d9171dfdeafee0b29e`.
+Graph and source checks cover the Begin/Abort path and exact-valid fuzz helper;
+ambiguous method names were resolved directly in source. The graph contains no
+self-loop or exact duplicate edge. Graph output is iteration evidence, not
+correctness or admission.
 
 ## Cold review
 
@@ -152,6 +161,12 @@ Independent review of exact prior head `66feed0` then rejected cancellation
 boundaries, callback error identity, Reader/Writer contract handling,
 per-record 32 KiB allocation, and a weak arbitrary-archive fuzz oracle. Those
 implementation and evidence findings are corrected in exact source `5ec6f2f`.
+Independent review of documentation/evidence head `ca9de4d` then found raw
+`Cause` mislabeled as redacted, abandoned Begin stage-plus-error state, missing
+post-Abort deadline reporting, missing cost comments, empty-payload fuzz oracle
+holes, silent proof logs, and stale changelog chronology. All technical
+findings are corrected in exact source `95edd82`; the final evidence commit is
+documentation-only.
 
 ## Remaining gate
 
