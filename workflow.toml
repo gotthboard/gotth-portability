@@ -1,0 +1,73 @@
+schema_version = 1
+project = "gotth-portability"
+profile = "strict"
+active = "portable-v1"
+
+[settings]
+worktree_root = "worktrees"
+workflow_root = "workflow"
+default_branch = "main"
+
+[toolchain]
+build = "go build -mod=readonly ./..."
+test = "go test -mod=readonly -race -cover ./..."
+lint = "go vet -mod=readonly ./..."
+format = "gofmt -w"
+coverage = "go test -mod=readonly -coverprofile=coverage.out ./..."
+
+[coverage]
+map = "workflow/COVERAGE.md"
+profile = "strict"
+block_unresolved_high_risk = true
+exception_expiry_days = 14
+
+[feature.portable-v1]
+id = "portable-v1"
+slug = "portable-v1"
+name = "Implement consumer-neutral portability streaming"
+namespace = "portability"
+parent = ""
+state = "in_progress"
+risk = "high"
+assurance = "traceable-tests"
+created_at = "2026-09-03T15:45:00Z"
+activated_at = "2026-09-03T15:45:00Z"
+updated_at = "2026-09-03T15:45:00Z"
+completed_at = ""
+folder = "workflow/features/portable-v1"
+source_path = "pkg/portability"
+worktree = "/tmp/gotth-portability-worktrees/v1-portability"
+branch = "feature/v1-portability"
+scope = ["Versioned opaque streaming format", "Integrity manifest", "Compatibility validation", "Boundary checkpoints", "Staged imports", "MIT licensing"]
+non_goals = ["Application schema", "Authorization or disclosure policy", "Database or transport", "Encryption or compression", "Multi-record atomicity"]
+affected_files = ["**"]
+invariants = ["Payloads are never logged", "No record is committed before its digest passes", "Only a validated footer plus EOF proves completeness", "No remote or live system is mutated"]
+acceptance = ["Requirements trace to code and evidence", "Format, vet, build, race, coverage, fuzz, external-consumer, performance, and worker Judge gates pass", "Independent final review remains pending"]
+
+[feature.portable-v1.rollback]
+strategy = "revert_local_feature_commits"
+notes = "No release, tag, push, consumer pin, or persistent external state exists"
+data_loss_risk = false
+requires_migration_down = false
+
+[[feature.portable-v1.interface]]
+name = "Go portability API"
+kind = "api"
+stability = "unstable-unreleased"
+change = "new"
+
+[[feature.portable-v1.interface]]
+name = "Portability wire format v1"
+kind = "protocol"
+stability = "unstable-unreleased"
+change = "new"
+
+[[feature.portable-v1.verification]]
+id = "local"
+kind = "unit"
+command = "make verify"
+required = true
+timeout_seconds = 1200
+side_effect = "local_write"
+network = false
+retries = 0
