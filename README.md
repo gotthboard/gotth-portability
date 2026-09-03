@@ -52,8 +52,9 @@ application.
 - Cancellation is checked before and after every caller-owned I/O or callback.
   A canceled commit is also an unknown outcome. Best-effort `Abort` receives a
   fresh context bounded by `AbortTimeout`; sink implementations must honor it.
-  If `Begin` returns both a stage and an error, that stage is aborted. Cleanup
-  deadline expiry is reported as `ErrSink` even if `Abort` returns nil.
+  If `Begin` returns both a stage and an error, that stage is aborted; any
+  cancellation observed after the callback is also retained as `ErrIO`.
+  Cleanup deadline expiry is reported as `ErrSink` even if `Abort` returns nil.
 - Record commit is atomic only to the degree supplied by the consumer sink.
   There is no multi-record transaction or exactly-once external effect.
 - The package does not compress, encrypt, store, transmit, authorize, redact,

@@ -33,8 +33,10 @@ a commit error or cancellation observed after `Commit` as potentially having
 taken effect. The library cannot resolve a consumer backend's unknown commit
 outcome and therefore neither aborts nor advances its checkpoint then.
 If `Begin` returns both a stage and an error, the begin error remains primary
-and the stage receives bounded `Abort`. An expired cleanup context is reported
-as an additional `ErrSink` failure even when `Abort` returns nil.
+and the stage receives bounded `Abort`. Cancellation observed after that
+callback is retained as an additional `ErrIO` classification rather than
+discarded. An expired cleanup context is reported as an additional `ErrSink`
+failure even when `Abort` returns nil.
 
 ## Failure model
 

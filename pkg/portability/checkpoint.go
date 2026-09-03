@@ -45,8 +45,9 @@ func (c Checkpoint) Offset() uint64 { return c.offset }
 
 // validate rejects impossible or over-limit resume state.
 // Complexity: time O(a+s), Omega(1), tight Theta(a+s) for valid state;
-// auxiliary space O(1), Omega(1), tight Theta(1); variables: a and s are
-// header identifier lengths.
+// auxiliary space O(a+s), Omega(1), tight Theta(a+s) for valid state because
+// validation reconstructs the canonical header; variables: a and s are header
+// identifier lengths.
 func (c Checkpoint) validate(l Limits) error {
 	if err := c.validateStructure(); err != nil {
 		return err
@@ -126,9 +127,11 @@ func (c Checkpoint) MarshalBinary() ([]byte, error) {
 }
 
 // ParseCheckpoint verifies and decodes one exact checkpoint representation.
-// Complexity: time O(n), Omega(n), tight Theta(n); auxiliary space O(a+s),
-// Omega(1), tight Theta(a+s) for valid input; variables: n is len(data), a/s
-// are decoded identifier lengths.
+// Complexity: time O(n), Omega(1); inputs that reach checksum computation,
+// including every valid input, take tight Theta(n), while fixed-prefix or
+// length rejection can take Theta(1).
+// Auxiliary space O(a+s), Omega(1), tight Theta(a+s) for valid input;
+// variables: n is len(data), a/s are decoded identifier lengths.
 func ParseCheckpoint(data []byte, limits Limits) (Checkpoint, error) {
 	normalized, err := limits.normalize()
 	if err != nil {

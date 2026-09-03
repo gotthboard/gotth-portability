@@ -88,7 +88,8 @@ type RecordSink interface {
 
 // Sink begins consumer-owned staging for one record. If Begin returns both a
 // non-nil RecordSink and a non-nil error, the library calls Abort on that stage
-// before returning the begin failure.
+// before returning the begin failure. Cancellation observed after Begin is
+// additionally classified as ErrIO rather than suppressing either outcome.
 type Sink interface {
 	Begin(context.Context, Header, RecordMeta) (RecordSink, error)
 }

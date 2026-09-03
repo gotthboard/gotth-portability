@@ -44,8 +44,9 @@ func NewExporter(ctx context.Context, w io.Writer, header Header, limits Limits)
 // ResumeExporter restores a committed boundary. The caller must position and,
 // after a failed prior attempt, truncate the writer to checkpoint.Offset.
 // Complexity: time O(a+s), Omega(1), tight Theta(a+s) for valid state;
-// auxiliary space O(1), Omega(1), tight Theta(1); variables: a and s are
-// header identifier lengths.
+// auxiliary space O(a+s), Omega(1), tight Theta(a+s) for valid state because
+// checkpoint validation reconstructs the canonical header; variables: a and s
+// are header identifier lengths.
 func ResumeExporter(w io.Writer, checkpoint Checkpoint, limits Limits) (*Exporter, error) {
 	if w == nil {
 		return nil, wrap(ErrInvalid, "writer", nil)

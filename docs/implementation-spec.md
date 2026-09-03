@@ -55,8 +55,10 @@ callback allocations.
   after a commit call, has unknown outcome and does not call `Abort` or advance
   the checkpoint.
 - `Sink.Begin` may return a non-nil stage with an error. The begin error remains
-  primary and the library runs bounded `Abort` on that stage. Cleanup context
-  expiry adds `ErrSink`, including when `Abort` returns nil after the deadline.
+  primary and the library runs bounded `Abort` on that stage. Cancellation
+  observed after the callback adds `ErrIO` without discarding `ErrSink` or its
+  raw cause. Cleanup context expiry adds `ErrSink`, including when `Abort`
+  returns nil after the deadline.
 - Checkpoints have a versioned binary encoding protected by SHA-256. Decoding
   rejects corruption, unknown versions, and structurally inconsistent state.
 

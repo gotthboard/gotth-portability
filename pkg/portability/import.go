@@ -26,8 +26,9 @@ type Importer struct {
 // NewImporter reads and validates the header and calls compatibility before
 // any record can be staged.
 // Complexity: time O(a+s)+R(a+s)+C, Omega(1), tight Theta(a+s)+R(a+s)+C on
-// success; auxiliary space O(a+s), Omega(1), tight Theta(a+s); variables: a/s
-// identifier lengths, R reader cost, C delegated compatibility cost.
+// success; local auxiliary space O(a+s), Omega(1), tight Theta(a+s), plus
+// delegated Reader and Compatibility working space; variables: a/s identifier
+// lengths, R reader cost, C delegated compatibility cost.
 func NewImporter(ctx context.Context, r io.Reader, limits Limits, compatibility Compatibility) (*Importer, error) {
 	if ctx == nil || r == nil || compatibility == nil {
 		return nil, wrap(ErrInvalid, "context, reader, or compatibility", nil)
@@ -58,8 +59,10 @@ func NewImporter(ctx context.Context, r io.Reader, limits Limits, compatibility 
 // ResumeImporter restores a validated committed boundary. The caller must
 // position the reader at checkpoint.Offset.
 // Complexity: time O(a+s)+C, Omega(1), tight Theta(a+s)+C for valid state;
-// auxiliary space O(1), Omega(1), tight Theta(1); variables: a/s identifier
-// lengths and C delegated compatibility cost.
+// local auxiliary space O(a+s), Omega(1), tight Theta(a+s) for valid state,
+// plus delegated Compatibility working space, because checkpoint validation
+// reconstructs the canonical header; variables: a/s identifier lengths and C
+// delegated compatibility cost.
 func ResumeImporter(ctx context.Context, r io.Reader, checkpoint Checkpoint, limits Limits, compatibility Compatibility) (*Importer, error) {
 	if ctx == nil || r == nil || compatibility == nil {
 		return nil, wrap(ErrInvalid, "context, reader, or compatibility", nil)
@@ -183,15 +186,19 @@ func (i *Importer) readRecord(ctx context.Context, sink Sink) (Checkpoint, error
 		return Checkpoint{}, wrap(ErrIO, "begin record", err)
 	}
 	stage, beginErr := sink.Begin(ctx, i.cp.header, meta)
+	beginContextErr := ctx.Err()
 	if beginErr != nil {
-		primary := wrap(ErrSink, "begin record", beginErr)
+		var primary error = wrap(ErrSink, "begin record", beginErr)
+		if beginContextErr != nil {
+			primary = errors.Join(primary, wrap(ErrIO, "begin record", beginContextErr))
+		}
 		if stage != nil {
 			return Checkpoint{}, i.abort(ctx, stage, primary)
 		}
 		return Checkpoint{}, primary
 	}
-	if err := ctx.Err(); err != nil {
-		primary := wrap(ErrIO, "begin record", err)
+	if beginContextErr != nil {
+		primary := wrap(ErrIO, "begin record", beginContextErr)
 		if stage != nil {
 			return Checkpoint{}, i.abort(ctx, stage, primary)
 		}

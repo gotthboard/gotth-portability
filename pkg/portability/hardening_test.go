@@ -251,13 +251,18 @@ func TestBeginStageAndErrorRunsBoundedAbort(t *testing.T) {
 
 	for _, tc := range []struct {
 		name           string
+		returnStage    bool
 		cancelBegin    bool
 		abortFn        func(context.Context) error
 		wantAbortCause error
+		wantClasses    []error
 	}{
-		{name: "cleanup success"},
-		{name: "cleanup failure", abortFn: func(context.Context) error { return abortErr }, wantAbortCause: abortErr},
-		{name: "caller cancellation", cancelBegin: true},
+		{name: "no stage", wantClasses: []error{ErrSink}},
+		{name: "cleanup success", returnStage: true, wantClasses: []error{ErrSink}},
+		{name: "cleanup failure", returnStage: true, abortFn: func(context.Context) error { return abortErr }, wantAbortCause: abortErr, wantClasses: []error{ErrSink}},
+		{name: "canceled no stage", cancelBegin: true, wantClasses: []error{ErrSink, ErrIO}},
+		{name: "canceled with stage", returnStage: true, cancelBegin: true, wantClasses: []error{ErrSink, ErrIO}},
+		{name: "canceled with stage and cleanup failure", returnStage: true, cancelBegin: true, abortFn: func(context.Context) error { return abortErr }, wantAbortCause: abortErr, wantClasses: []error{ErrSink, ErrIO}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
@@ -271,17 +276,30 @@ func TestBeginStageAndErrorRunsBoundedAbort(t *testing.T) {
 				if tc.cancelBegin {
 					cancel()
 				}
-				return stage, beginErr
+				if tc.returnStage {
+					return stage, beginErr
+				}
+				return nil, beginErr
 			}))
-			assertClassSet(t, err, ErrSink)
-			if stage.aborts != 1 || stage.entryErr != nil || !stage.deadlineSet {
+			assertClassSet(t, err, tc.wantClasses...)
+			wantAborts := 0
+			if tc.returnStage {
+				wantAborts = 1
+			}
+			if stage.aborts != wantAborts || (tc.returnStage && (stage.entryErr != nil || !stage.deadlineSet)) {
 				t.Fatalf("aborts=%d entryErr=%v deadline=%v", stage.aborts, stage.entryErr, stage.deadlineSet)
 			}
 			if !containsExplicitCause(err, beginErr) {
 				t.Fatalf("primary begin cause lost: %v", err)
 			}
+			if tc.cancelBegin && !containsExplicitCause(err, context.Canceled) {
+				t.Fatalf("cancellation cause lost: %v", err)
+			}
 			if tc.wantAbortCause != nil && !containsExplicitCause(err, tc.wantAbortCause) {
 				t.Fatalf("cleanup cause %v missing: %v", tc.wantAbortCause, err)
+			}
+			if strings.Contains(err.Error(), beginErr.Error()) || strings.Contains(err.Error(), abortErr.Error()) {
+				t.Fatalf("public error leaked callback text: %q", err)
 			}
 		})
 	}
