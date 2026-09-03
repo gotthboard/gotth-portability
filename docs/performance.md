@@ -31,7 +31,7 @@ question here is visible allocation shape, not a fabricated speedup.
 Exact uninstrumented commands:
 
 ```text
-GOTTH_PORTABILITY_PERF=1 go test -mod=readonly -run '^TestPerformanceSamples$' -count=1 -v ./pkg/portability
+env GOTTH_PORTABILITY_PERF=1 go test -mod=readonly -run '^TestPerformanceSamples$' -count=1 -v ./pkg/portability
 go test -mod=readonly -run '^$' -bench '^Benchmark(Export|Import)$' -benchmem -benchtime=500ms -count=5 ./pkg/portability
 ```
 
@@ -42,11 +42,11 @@ correctness evidence only and are not mixed into the timing table.
 
 | Workload | Samples | p50 | p95 | p99 | Throughput |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| empty archive | 200 | 2.530 us | 4.629 us | 17.588 us | 290,493.32 archives/s |
-| 1 x 1 KiB | 200 | 14.537 us | 33.291 us | 295.801 us | 44,888.83 archives/s |
-| 16 x 64 KiB | 80 | 6.314986 ms | 9.934548 ms | 10.652104 ms | 143.42 archives/s |
-| 4 x 1 MiB | 20 | 29.722832 ms | 33.968614 ms | 34.256288 ms | 33.91 archives/s |
-| 1,000 empty records | 10 | 2.336678 ms | 2.665702 ms | 2.665702 ms | 419.53 archives/s |
+| empty archive | 200 | 2.328 us | 6.955 us | 15.702 us | 335,385.90 archives/s |
+| 1 x 1 KiB | 200 | 15.147 us | 44.610 us | 163.725 us | 45,251.11 archives/s |
+| 16 x 64 KiB | 80 | 6.255921 ms | 10.243377 ms | 11.176727 ms | 142.56 archives/s |
+| 4 x 1 MiB | 20 | 25.235500 ms | 36.678080 ms | 37.869382 ms | 36.63 archives/s |
+| 1,000 empty records | 10 | 2.352264 ms | 3.205633 ms | 3.205633 ms | 406.99 archives/s |
 
 The 1,000-empty-record workload isolates per-frame overhead and is the
 pathological metadata regime. The large workloads show the expected linear
@@ -59,9 +59,9 @@ objective.
 | --- | ---: | ---: |
 | zero records | 304, 3 | 544, 21 |
 | one empty record | 440, 9 | 776, 35 |
-| 1,000 empty records | 136,304, 6,003 | 232,544-232,548, 14,021 |
+| 1,000 empty records | 136,304, 6,003 | 232,544, 14,021 |
 | 1 x 1 KiB | 33,208, 10 | 33,544, 36 |
-| 1 x 1 MiB | 33,208-33,209, 10 | 33,544, 36 |
+| 1 x 1 MiB | 33,208, 10 | 33,544, 36 |
 | 1 x 16 MiB | 33,208-33,209, 10 | 33,544, 36 |
 
 The zero- and empty-record rows prove that no unconditional 32 KiB payload

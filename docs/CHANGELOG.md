@@ -6,10 +6,46 @@ Released sections use Semantic Versioning; unreleased work remains under
 
 ## Unreleased
 
-### 2026-09-03 — Complete independent post-repair findings
+### 2026-09-03 13:19 CDT — Preserve Begin cancellation and bind raw evidence
+
+Implementation commit: `d22c2de207a3a6b046b7ed96aa72d7640ca616f0`.
+Evidence commit: this documentation-only commit. The heading uses the verified
+implementation commit author time.
+
+Affected files:
+
+- `pkg/portability/**`
+- `README.md`, architecture/spec/performance/verification documentation
+- workflow exact evidence record
+
+Explanation:
+
+Sample cancellation after every `Sink.Begin` result shape. A simultaneous begin
+error and cancellation now retains primary `ErrSink`, additional `ErrIO`, and
+both raw causes while bounded-aborting any returned stage. Correct checkpoint,
+resume, and parser complexity bounds to include temporary canonical-header
+allocation and constant-time early rejects. Replace unbound raw admission logs
+with exact-source traces plus separately hashed raw outputs.
+
+Verification:
+
+- focused Begin/Abort/cancellation and checkpoint/resume tests pass under race
+- full clean-clone format/diff/vet/build/race, 92.9% coverage, race x50, four
+  sequential five-second fuzz targets, performance/allocation matrix, external
+  consumer proof, and revision-bound Graphify pass against exact implementation
+  `d22c2de`; every trace records source, command, time, exit, and raw-output hash
+
+Risks / non-goals:
+
+- The API remains unreleased; no compatibility promise or speedup claim is made.
+- No downstream consumer schema or pin is fabricated. Workflow stays
+  `in_progress` and unreleased.
+
+### 2026-09-03 12:56 CDT — Complete independent post-repair findings
 
 Implementation commit: `95edd8269173a7d580d2ab0a9ecf3560c4c2b5ce`.
-Evidence commit: this documentation-only commit.
+Evidence commit: `e4fe93fb1132e62035080c59c342d756fbbec624`. The heading
+uses that evidence commit's verified author time.
 
 Affected files:
 
@@ -41,10 +77,11 @@ Risks / non-goals:
 - No downstream consumer schema or pin is fabricated. Workflow stays
   `in_progress` and unreleased.
 
-### 2026-09-03 — Harden cancellation, callback identity, I/O, and allocation
+### 2026-09-03 12:15 CDT — Harden cancellation, callback identity, I/O, and allocation
 
 Implementation commit: `5ec6f2f759078fa7fe894f99ff1c245a6c67e6f4`.
 Evidence commit: `ca9de4dfa87334fc4dd9929649e48c783bd466c6`.
+The heading uses that evidence commit's verified author time.
 
 Affected files:
 
