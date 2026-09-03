@@ -2,9 +2,14 @@
 
 ## Supported versions
 
-Planned placeholder; no implementation or API. No version currently carries a
-separate long-term security-support promise. Once releases exist, supported
-versions will be listed here and in the changelog.
+Unreleased implementation only. No version currently carries a security-support
+promise. Once releases exist, supported versions will be listed here and in the
+changelog. The feature branch is not a supported distribution channel.
+
+Integrity digests are not producer authentication. Applications must
+authenticate or sign archives when provenance matters, enforce authorization
+before export/import, and make staged sink commits idempotent by archive ID and
+sequence.
 
 ## Reporting a vulnerability
 

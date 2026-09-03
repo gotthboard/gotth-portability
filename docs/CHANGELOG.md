@@ -6,6 +6,40 @@ Released sections use Semantic Versioning; unreleased work remains under
 
 ## Unreleased
 
+### 2026-09-03 12:10 CDT — Implement bounded resumable portability streams
+
+Commit: current commit; hash assigned by Git after commit
+
+Affected files:
+
+- `pkg/portability/**`
+- `README.md`, `CONTRIBUTING.md`, `SECURITY.md`
+- `docs/distribution.md`, `docs/RELEASING.md`
+
+Explanation:
+
+Implement wire-format V1 for consumer-owned opaque records. Export and import
+stream through fixed buffers, validate bounded metadata and payload sizes,
+carry a rolling integrity chain across persistent record-boundary checkpoints,
+and require a valid footer followed by EOF for completeness. Import uses
+consumer-owned staged sinks and commits only after record integrity succeeds.
+Stable errors omit payload and consumer error text.
+
+Verification:
+
+- focused unit, negative, exhaustive truncation, boundary, external-package,
+  bounded-write, and fuzz seed tests
+- `go vet -mod=readonly ./...`
+- `go test -mod=readonly -race ./...`
+- `go build -mod=readonly ./...`
+
+Risks / non-goals:
+
+- This remains unreleased and independently unadmitted.
+- SHA-256 integrity is not producer authentication.
+- Consumer policy, persistence, idempotency, storage positioning, encryption,
+  compression, and transport remain outside the library.
+
 ### 2026-09-03 10:45 CDT — Define the portable streaming contract
 
 Commit: current commit; hash assigned by Git after commit
