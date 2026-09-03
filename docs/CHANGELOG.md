@@ -8,7 +8,8 @@ Released sections use Semantic Versioning; unreleased work remains under
 
 ### 2026-09-03 — Harden cancellation, callback identity, I/O, and allocation
 
-Commit: current commit; hash assigned by Git after commit
+Implementation commit: `5ec6f2f759078fa7fe894f99ff1c245a6c67e6f4`.
+Evidence commit: current commit; hash assigned by Git after commit.
 
 Affected files:
 
