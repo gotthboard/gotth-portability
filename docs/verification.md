@@ -3,7 +3,7 @@
 Current worker verification:
 
 - Go 1.26.6 format, diff check, vet, build, race, and coverage pass locally.
-- Hardened source `55ba1451cf80661f97c62cc3d41e38e2a0cc77e1` reports
+- Hardened source `9a0392433796c26f12b1a83e04becbf9799a3c41` reports
   94.7% race-instrumented statement coverage. `ResumeImporter` is 100%
   statement-covered with direct argument, limit/checkpoint-order,
   pre/post-compatibility cancellation, incompatible-cause redaction, no-reader-
@@ -23,7 +23,8 @@ Current worker verification:
   and non-nil stages, abort success/failure, and cancellation after the callback;
   simultaneous begin failure and cancellation retain both `ErrSink` and `ErrIO`
   without losing raw causes. Nil/error returns after cleanup deadline are also
-  covered.
+  covered. Zero and negative cleanup timeouts prove an already-expired fresh
+  cleanup context returns `ErrSink` without invoking `RecordSink.Abort`.
 - Strict I/O tests cover positive-short nil writes without retry, legal
   data-plus-error reads, negative/oversized Reader counts, transient empty reads,
   and the documented no-progress bound.
@@ -31,11 +32,11 @@ Current worker verification:
   `Next` preflight failure consumes no record/frame I/O and permits retry, while
   failure after partial output/input poisons the object.
 - Complexity contracts account for constant-time rejection, skipped delegated
-  calls, aggregate bounded exact-read cost, and checkpoint validation's
-  temporary canonical header allocation. `NewExporter`, `ResumeExporter`,
-  `ResumeImporter`, `Finalize`, `writeExactContext`, `readUint64`, and
-  `ParseCheckpoint` distinguish rejection paths from delegated or tight valid
-  paths.
+  calls, aggregate bounded exact-read cost, record metadata/payload/digest/EOF
+  I/O, sink callbacks, local/retained buffers, delegated auxiliary space, and
+  checkpoint validation's temporary canonical header allocation. Public record
+  operations and their adjacent implementation units distinguish rejection,
+  footer, failure, and successful-record paths.
 - Every public sentinel is injected through export Reader/Writer,
   compatibility, begin, staged write, commit, and abort callbacks. Only the
   library classification participates in `errors.Is`; `Causer` retains explicit
@@ -72,7 +73,8 @@ allocation, fuzz-oracle, and evidence corrections. Performance,
 external-consumer, and graph evidence remain the `d22c2de` runtime baseline.
 Fresh verify, 94.7% race coverage, focused race x3, four sequential three-second
 fuzz probes, exact changelog provenance, and clean-clone evidence bind source
-`55ba145`; that commit changes comments, documentation, and tests, not
-executable runtime behavior. A real downstream consumer schema/pin does not yet
-exist; workflow therefore remains `in_progress` and unreleased. Independent
-final admission remains orchestrator-owned.
+`9a03924`. Its only executable change suppresses Abort when the fresh cleanup
+context is already expired; record wire/API behavior is unchanged. A real
+downstream consumer schema/pin does not yet exist; workflow therefore remains
+`in_progress` and unreleased. Independent final admission remains
+orchestrator-owned.

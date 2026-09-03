@@ -7,7 +7,7 @@
 | PORT-003 | spec/limits | validation and lazy reusable copy buffers | limit boundaries, 5 MiB bounded writes, allocation matrix | covered |
 | PORT-004 | architecture/stream | record digest and rolling chain | corruption, manifest, fuzz | covered |
 | PORT-005 | architecture/checkpoints | checkpoint and resume constructors | codec corruption, export equivalence, full ResumeImporter rejection/cancellation/no-I/O/restoration matrix | covered |
-| PORT-006 | architecture/import commit | staged sink lifecycle and bounded abort | commit/abort/write/begin failures, stage-plus-error, deadline expiry, cancellation seams | covered |
+| PORT-006 | architecture/import commit | staged sink lifecycle and bounded abort | commit/abort/write/begin failures, stage-plus-error, pre/post-callback deadline expiry, cancellation seams | covered |
 | PORT-007 | spec/public contracts | footer, manifest, retry, and poisoned state | empty, truncation, trailing, corrupt footer, preflight retry, partial-I/O poison | covered |
 | PORT-008 | spec/errors | classified errors, strict I/O contracts, explicit raw causes | every-sentinel spoofing, I/O contract, Error-string redaction/raw-Cause tests | covered |
 | PORT-009 | PRD/non-goals | API and docs | external consumer and boundary audit | covered |

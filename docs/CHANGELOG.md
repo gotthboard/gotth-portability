@@ -8,16 +8,21 @@ uses the named commit's Git author time, rendered to the minute in CDT.
 
 ## Unreleased
 
-### 2026-09-03 15:30 CDT — Complete record-cost and Abort bracketing contracts
+### 2026-09-03 15:31 CDT — Complete record-cost and Abort bracketing contracts
 
-Commit: current commit; hash assigned by Git after commit
+Implementation commit: `9a0392433796c26f12b1a83e04becbf9799a3c41`.
+Evidence commit: this documentation-only commit. The heading uses the verified
+implementation commit author time.
 
 Affected files:
 
 - `docs/CHANGELOG.md`
+- `docs/verification.md`
 - `pkg/portability/export.go`
 - `pkg/portability/hardening_test.go`
 - `pkg/portability/import.go`
+- `workflow/COVERAGE.md`
+- `workflow/features/portable-v1/evidence/verification.md`
 
 Explanation:
 

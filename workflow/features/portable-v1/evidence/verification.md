@@ -20,6 +20,8 @@
   `63b7c8af4450e577d8f834d7592fcea0b32d6a3d`.
 - Resume-contract, focused-coverage, and exact-file-provenance correction:
   `55ba1451cf80661f97c62cc3d41e38e2a0cc77e1`.
+- Record-cost and pre-Abort deadline correction:
+  `9a0392433796c26f12b1a83e04becbf9799a3c41`.
 - Branch/worktree: `feature/v1-portability` at
   `/tmp/gotth-portability-worktrees/v1-portability`.
 - No push, PR, tag, release, deployment, live database, secret, or remote state
@@ -61,7 +63,7 @@ go vet -mod=readonly ./...
 go build -mod=readonly ./...
 bash /tmp/gotth-portability-changelog-audit.sh /tmp/gotth-portability-worktrees/v1-portability
 make verify
-go test -mod=readonly -race -count=1 -coverprofile=/tmp/gotth-portability-coverage-55ba145.out ./...
+go test -mod=readonly -race -count=1 -coverprofile=/tmp/gotth-portability-coverage-9a03924.out ./...
 ```
 
 Hardened source coverage is 94.7% under race. Boundary, negative, staged sink,
@@ -76,6 +78,10 @@ partial record/frame progress poisons it. Begin error paths cover nil/non-nil
 stages, cancellation after the callback, and Abort success/failure.
 Simultaneous begin failure and cancellation retain `ErrSink`, `ErrIO`, and both
 raw causes. Both nil/error returns after a cleanup deadline have direct tests.
+Zero and already-expired cleanup timeouts prove `Abort` is not invoked at all;
+the fresh cleanup context is checked immediately before the callback.
+Record-operation cost contracts separately account for fixed metadata, digest,
+payload, and EOF I/O and distinguish local from delegated auxiliary space.
 Exact-valid fuzz seeds require the commit entry even for empty payload.
 `ResumeImporter` is 100% statement-covered: its argument and limit/checkpoint
 ordering, entry and post-compatibility cancellation, incompatible raw-cause
@@ -88,13 +94,15 @@ compares the recorded affected-file list with the exact unique commit union.
 
 Fresh exact-source fuzz probes ran sequentially for three seconds each:
 
-- archive roundtrip: 136,681 executions;
-- checkpoint parser: 137,108 executions;
-- bounded arbitrary archive: 170,951 executions;
-- valid-archive mutation oracle: 34,895 executions.
+- archive roundtrip: 132,717 executions;
+- checkpoint parser: 173,839 executions;
+- bounded arbitrary archive: 185,161 executions;
+- valid-archive mutation oracle: 31,464 executions.
 
-The runtime implementation is unchanged from `d22c2de`; its retained fresh
-five-second fuzz runs were:
+The runtime baseline `d22c2de` predates the exact-source pre-Abort deadline
+guard. Its retained five-second fuzz runs remain historical evidence for the
+unchanged archive format and common record paths, but do not prove the new
+expired-cleanup branch:
 
 - archive roundtrip: 19,653 executions;
 - checkpoint parser: 7,696 executions;
@@ -134,14 +142,17 @@ hashed below, so helper-backed command records remain reproducible.
 
 ## Performance evidence
 
-The unchanged-runtime `d22c2de` end-to-end matrix and limitations are in
+The `d22c2de` end-to-end matrix and limitations are in
 `docs/performance.md`. Zero-record
 export uses 304 B/op and three allocations; one empty record uses 440 B/op and
 nine allocations. Zero-record import uses 544 B/op and 21 allocations; one
 empty record uses 776 B/op and 35 allocations. Non-empty export/import remains
 about 33.2/33.5 KiB per operation from 1 KiB through 16 MiB payloads. Thus empty
 records do not pay the 32 KiB buffer, and the first non-empty record's buffer is
-reused. No runtime speedup is claimed; Amdahl inputs are N/A.
+reused. No runtime speedup is claimed; Amdahl inputs are N/A. The exact-source
+runtime change only suppresses an Abort callback when the fresh cleanup context
+is already expired. It has direct correctness coverage; no performance claim
+or baseline reuse is made for that branch.
 
 Exact uninstrumented commands were:
 
@@ -158,6 +169,33 @@ sentinels. `errors.Is` now exposes only the library classification. `Causer`
 provides explicit access to the unchanged raw cause, which may be sensitive and
 must be consumer-redacted before logging or display; public `Error()` text
 remains redaction-safe.
+
+| Exact source `9a03924` retained artifact | SHA-256 |
+| --- | --- |
+| `/tmp/gotth-portability-verify-9a03924.log` | `2ae85e9708dfb33d94a4fb1efa387b01f446691b25ad3d5c8e40a532b9a4ed1a` |
+| `/tmp/gotth-portability-verify-9a03924.raw.log` | `17654113acdc9fbc2a6b659b8a2ca63f89a27ed2e12f62a03754df1856a102f4` |
+| `/tmp/gotth-portability-coverage-9a03924.log` | `de63f246b9b910fb05f7584a68a5ebb312d635b63fb8cb362ec127618d9492b8` |
+| `/tmp/gotth-portability-coverage-9a03924.raw.log` | `69cd464fe4f5316675f339c3adeadd9140f6dcc089b064283ce9dc3890d45ad1` |
+| `/tmp/gotth-portability-coverage-9a03924.out` | `2c84d8453269f3c727dfcc1998b000f8b960d50e4cf0319b6e054e4498be2705` |
+| `/tmp/gotth-portability-coverage-functions-9a03924.log` | `61abce5e0517e2d6a0d6c61def7f94f3bd7be6e69f38efca5464c64f49a89f46` |
+| `/tmp/gotth-portability-coverage-functions-9a03924.raw.log` | `adba68a3c8da10fa60b9f0e8eb44a39deda31ee277b6d772a6beebba8b8e16a1` |
+| `/tmp/gotth-portability-focused-race-1-9a03924.log` | `c448aaf78a180e291864200f0e89491fa0bd570dfe24f23502514cbbf70384f1` |
+| `/tmp/gotth-portability-focused-race-1-9a03924.raw.log` | `ed891fd0d40ea61433bfc3f9b5c6ece9ca69bc466de196c111e97c50a9f84240` |
+| `/tmp/gotth-portability-focused-race-2-9a03924.log` | `ff10f858271198ae654f65b8f06b784ea2acbfa22a511e5c4d51474e0bb4b0af` |
+| `/tmp/gotth-portability-focused-race-2-9a03924.raw.log` | `df2e7876e667aac61d57d7cf59d9352d0e4e7f7218c74d1644b7d529e17c7b41` |
+| `/tmp/gotth-portability-focused-race-3-9a03924.log` | `929c63e2a8395a6e2294bbb1d3216ada3d3ee01df53d2fcd285530103053f0c7` |
+| `/tmp/gotth-portability-focused-race-3-9a03924.raw.log` | `ed891fd0d40ea61433bfc3f9b5c6ece9ca69bc466de196c111e97c50a9f84240` |
+| `/tmp/gotth-portability-fuzz-roundtrip-9a03924.log` | `fa6377555c216c58b667e91f92c2dc09d2f2ccfcf688a93b695cdf102b9c0854` |
+| `/tmp/gotth-portability-fuzz-roundtrip-9a03924.raw.log` | `7365b690d1eecc0296fa01b00a272ddd4093ce28bc5265d4e4e36f9eedf284b1` |
+| `/tmp/gotth-portability-fuzz-checkpoint-9a03924.log` | `cf77797d6ae9eec074e97c29555436f5544fe843b5a2aebe4f4ac6679455be43` |
+| `/tmp/gotth-portability-fuzz-checkpoint-9a03924.raw.log` | `84eed6c0206ce0625c62b2b77b418d9396d97291d661188c2073449ef57c3f06` |
+| `/tmp/gotth-portability-fuzz-arbitrary-9a03924.log` | `745cd7a749e1bbb15118b496ac4af80a265fcd155d533ef4e7128f39258679b1` |
+| `/tmp/gotth-portability-fuzz-arbitrary-9a03924.raw.log` | `7fccba8f95c739ac6e2e42597352fdcd18ad4f9625684c3008df9da587e8ed22` |
+| `/tmp/gotth-portability-fuzz-mutation-9a03924.log` | `89bc668e33e40f6f38f9373be44861de0a147046ccdc3e69017d4c1054083bca` |
+| `/tmp/gotth-portability-fuzz-mutation-9a03924.raw.log` | `7d4acd0b42e54a23a783eefa2cb1428aef051a5214c9289335e36e57d405ad04` |
+| `/tmp/gotth-portability-clean-clone-9a03924.log` | `746feb0b19c6782e391643ac1e0f21a22a4d17b1d81c2dff8a3b7e9730ea5c94` |
+| `/tmp/gotth-portability-clean-clone-9a03924.raw.log` | `ceeb18140aa071d2897ce3675102d23dd4ce013c1dcb6a7a683172a8a7d36c81` |
+| `/tmp/gotth-portability-evidence-9a03924.sh` | `2ddee750d65dbdf0058f47d52548f6f8ec84f2263e0159a6387c57f50d5a6a16` |
 
 | Exact source `55ba145` retained artifact | SHA-256 |
 | --- | --- |
@@ -199,8 +237,10 @@ remains redaction-safe.
 | `/tmp/gotth-portability-coverage-63b7c8a.out` | `2b3dd68f02583c8ad3d6ccb4a0eaf9f32ac3a01eeea0828dd2cca46d8e52ec11` |
 
 The following artifacts bind runtime baseline `d22c2de`. They remain relevant
-because source `55ba145` changes comments, documentation, and tests only; they
-are not represented as current-source executions.
+only to unchanged archive-format, common-path performance, external-consumer,
+and historical graph claims. They do not prove the later exact-source
+pre-Abort expired-context branch and are not represented as current-source
+executions.
 
 | Unchanged-runtime baseline artifact | SHA-256 |
 | --- | --- |
@@ -255,6 +295,9 @@ Graph and source checks cover the Begin/Abort path and exact-valid fuzz helper;
 ambiguous method names were resolved directly in source. The graph contains no
 self-loop or exact duplicate edge. Graph output is iteration evidence, not
 correctness or admission.
+The graph predates `9a03924` and therefore does not model its one new deadline
+guard. That localized branch was reviewed and tested directly; no exact-source
+graph claim is made for this repair.
 
 ## Cold review
 
@@ -297,6 +340,15 @@ exact named-commit union, and raises `ResumeImporter` to 100% statement
 coverage with direct no-I/O and restoration proof. Fresh exact-source traces
 bind full verification, 94.7% race coverage, focused race x3, four fuzz probes,
 and a clean clone. The final evidence commit remains documentation-only.
+Independent review of evidence head `88d2c36` then found that record-operation
+cost contracts omitted fixed metadata/digest I/O and delegated auxiliary space,
+and that `abortWithTimeout` could call `Abort` even when its fresh cleanup
+context had already expired. Exact source `9a03924` accounts for each I/O and
+space component, checks the fresh context immediately before the callback, and
+adds an expected-red/green zero-callback regression test for zero and negative
+timeouts. Fresh exact-source traces bind full verification, 94.7% race
+coverage, focused race x3, four fuzz probes, and a clean detached clone. This
+final evidence commit remains documentation-only.
 
 ## Remaining gate
 
