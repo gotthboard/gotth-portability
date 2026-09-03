@@ -9,6 +9,12 @@ sequence (`u64`), kind length/value (`u16`), key length/value (`u16`), payload
 length (`u64`), payload bytes, and SHA-256 payload digest. The footer is type
 `0xff`, record count (`u64`), payload-byte count (`u64`), and rolling chain.
 
+Archive ID, schema ID, and record kind are non-empty; record key may be empty.
+All string lengths count encoded bytes, not Unicode code points. Strings must be
+valid UTF-8 and contain no NUL byte. The first record sequence is zero and each
+subsequent sequence is exactly the previous value plus one; consequently the
+next sequence equals the number of committed records.
+
 The initial chain is SHA-256 of the exact encoded header. Each next chain is
 SHA-256 of the previous chain plus the canonical record frame metadata and
 payload digest. The footer itself is not chained. EOF immediately after a
@@ -25,13 +31,15 @@ selects documented defaults. Copying uses one fixed 32 KiB buffer.
 
 - `NewExporter` writes and hashes one header; `WriteRecord` streams exactly the
   declared payload length and returns a boundary checkpoint; `Finalize` writes
-  one footer and returns the manifest.
+  one footer and returns the manifest. `Exporter.Checkpoint` returns the last
+  safe boundary even when the first record fails after partial output.
 - `ResumeExporter` restores the header, counters, chain, and offset from a
   validated checkpoint; it trusts the caller to position an append target at
   that exact offset.
 - `NewImporter` reads and compatibility-checks the header before any sink is
-  opened. `ResumeImporter` restores validated boundary state and trusts the
-  caller to position input at the checkpoint offset.
+  opened. `Importer.Checkpoint` returns the last committed boundary even after
+  an unknown sink-commit outcome. `ResumeImporter` restores validated boundary
+  state and trusts the caller to position input at the checkpoint offset.
 - `Next` stages, streams, validates, and commits one record. It returns
   `ErrComplete` only after footer and EOF validation. `Manifest` fails until
   that explicit completion state exists.
@@ -40,7 +48,7 @@ selects documented defaults. Copying uses one fixed 32 KiB buffer.
 
 ## Deterministic errors
 
-Public sentinels distinguish invalid arguments, malformed/truncated stream,
-incompatibility, limit overflow, integrity failure, sequence mismatch, sink
-failure, incomplete state, finalized state, and clean completion. Wrapped
+Public sentinels distinguish invalid arguments, malformed/truncated stream, I/O
+failure, incompatibility, limit overflow, integrity failure, sequence mismatch,
+sink failure, incomplete state, finalized state, and clean completion. Wrapped
 errors retain a cause but never include payload content.

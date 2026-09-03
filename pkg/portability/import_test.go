@@ -245,4 +245,78 @@ func TestImporterEmptyArchive(t *testing.T) {
 	}
 }
 
+type unknownOutcomeSink struct {
+	staged    bytes.Buffer
+	committed map[uint64]string
+	sequence  uint64
+	failOnce  bool
+	aborts    int
+}
+
+func (s *unknownOutcomeSink) Begin(_ context.Context, _ Header, meta RecordMeta) (RecordSink, error) {
+	s.sequence = meta.Sequence
+	s.staged.Reset()
+	return unknownOutcomeRecord{s}, nil
+}
+
+type unknownOutcomeRecord struct{ owner *unknownOutcomeSink }
+
+func (r unknownOutcomeRecord) Write(p []byte) (int, error) { return r.owner.staged.Write(p) }
+func (r unknownOutcomeRecord) Abort(context.Context) error {
+	r.owner.aborts++
+	return nil
+}
+func (r unknownOutcomeRecord) Commit(context.Context) error {
+	if r.owner.committed == nil {
+		r.owner.committed = make(map[uint64]string)
+	}
+	value := r.owner.staged.String()
+	if prior, ok := r.owner.committed[r.owner.sequence]; ok {
+		if prior != value {
+			return errors.New("idempotency conflict")
+		}
+		return nil
+	}
+	r.owner.committed[r.owner.sequence] = value
+	if r.owner.failOnce {
+		r.owner.failOnce = false
+		return errors.New("unknown outcome")
+	}
+	return nil
+}
+
+func TestImporterInitialCheckpointRecoversUnknownCommitOutcome(t *testing.T) {
+	t.Parallel()
+
+	data := archiveBytes(t, Record{Kind: "x", Size: 3, Body: strings.NewReader("abc")})
+	im, err := NewImporter(bytes.NewReader(data), Limits{}, acceptExact)
+	if err != nil {
+		t.Fatal(err)
+	}
+	initial := im.Checkpoint()
+	sink := &unknownOutcomeSink{failOnce: true}
+	if _, err := im.Next(context.Background(), sink); !errors.Is(err, ErrSink) {
+		t.Fatalf("commit outcome = %v", err)
+	}
+	if sink.committed[0] != "abc" || sink.aborts != 0 {
+		t.Fatalf("unknown outcome state = %#v, aborts=%d", sink.committed, sink.aborts)
+	}
+	if im.Checkpoint() != initial {
+		t.Fatal("unknown outcome advanced importer checkpoint")
+	}
+	resumed, err := ResumeImporter(bytes.NewReader(data[initial.Offset():]), initial, Limits{}, acceptExact)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := resumed.Next(context.Background(), sink); err != nil {
+		t.Fatalf("idempotent replay: %v", err)
+	}
+	if _, err := resumed.Next(context.Background(), sink); !errors.Is(err, ErrComplete) {
+		t.Fatalf("complete replay: %v", err)
+	}
+	if sink.committed[0] != "abc" || sink.aborts != 0 {
+		t.Fatalf("replayed state = %#v, aborts=%d", sink.committed, sink.aborts)
+	}
+}
+
 var _ io.Writer = (*memoryRecordSink)(nil)

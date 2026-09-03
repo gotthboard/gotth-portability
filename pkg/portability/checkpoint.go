@@ -67,7 +67,35 @@ func (c Checkpoint) validateStructure() error {
 	if c.nextSequence != c.records {
 		return wrap(ErrInvalid, "checkpoint counters", nil)
 	}
-	if c.offset < uint64(len(encodeHeader(c.header))) {
+	header := encodeHeader(c.header)
+	headerLen := uint64(len(header))
+	if c.records == 0 {
+		initial := sha256.Sum256(header)
+		if c.payloadBytes != 0 || c.offset != headerLen || c.chain != initial {
+			return wrap(ErrInvalid, "empty checkpoint state", nil)
+		}
+		return nil
+	}
+	const minRecordOverhead = uint64(1 + 8 + 2 + 1 + 2 + 8 + sha256.Size)
+	const maxRecordOverhead = uint64(1 + 8 + 2 + maxKindBytes + 2 + maxKeyBytes + 8 + sha256.Size)
+	minFrames, overflow := checkedMul(c.records, minRecordOverhead)
+	if overflow {
+		return wrap(ErrInvalid, "checkpoint offset", nil)
+	}
+	minimum, overflow := checkedAdd(headerLen, c.payloadBytes)
+	if overflow {
+		return wrap(ErrInvalid, "checkpoint offset", nil)
+	}
+	minimum, overflow = checkedAdd(minimum, minFrames)
+	if overflow || c.offset < minimum {
+		return wrap(ErrInvalid, "checkpoint offset", nil)
+	}
+	maxFrames, maxOverflow := checkedMul(c.records, maxRecordOverhead)
+	maximum, addOverflow := checkedAdd(headerLen, c.payloadBytes)
+	if !maxOverflow && !addOverflow {
+		maximum, addOverflow = checkedAdd(maximum, maxFrames)
+	}
+	if !maxOverflow && !addOverflow && c.offset > maximum {
 		return wrap(ErrInvalid, "checkpoint offset", nil)
 	}
 	return nil

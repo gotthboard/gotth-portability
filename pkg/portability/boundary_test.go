@@ -22,11 +22,18 @@ func TestMetadataLimitsAtBoundary(t *testing.T) {
 		{name: "archive limit", value: strings.Repeat("a", maxArchiveIDBytes), max: maxArchiveIDBytes, valid: true},
 		{name: "archive limit plus one", value: strings.Repeat("a", maxArchiveIDBytes+1), max: maxArchiveIDBytes},
 		{name: "archive materially beyond", value: strings.Repeat("a", maxArchiveIDBytes*4), max: maxArchiveIDBytes},
+		{name: "schema limit minus one", value: strings.Repeat("s", maxSchemaBytes-1), max: maxSchemaBytes, valid: true},
+		{name: "schema limit", value: strings.Repeat("s", maxSchemaBytes), max: maxSchemaBytes, valid: true},
+		{name: "schema limit plus one", value: strings.Repeat("s", maxSchemaBytes+1), max: maxSchemaBytes},
+		{name: "schema materially beyond", value: strings.Repeat("s", maxSchemaBytes*4), max: maxSchemaBytes},
 		{name: "kind limit minus one", value: strings.Repeat("k", maxKindBytes-1), max: maxKindBytes, valid: true},
 		{name: "kind limit", value: strings.Repeat("k", maxKindBytes), max: maxKindBytes, valid: true},
 		{name: "kind limit plus one", value: strings.Repeat("k", maxKindBytes+1), max: maxKindBytes},
+		{name: "kind materially beyond", value: strings.Repeat("k", maxKindBytes*4), max: maxKindBytes},
+		{name: "key limit minus one", value: strings.Repeat("q", maxKeyBytes-1), max: maxKeyBytes, valid: true},
 		{name: "key limit", value: strings.Repeat("q", maxKeyBytes), max: maxKeyBytes, valid: true},
 		{name: "key limit plus one", value: strings.Repeat("q", maxKeyBytes+1), max: maxKeyBytes},
+		{name: "key materially beyond", value: strings.Repeat("q", maxKeyBytes*4), max: maxKeyBytes},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			err := validateText("field", tc.value, tc.max, false)
@@ -69,17 +76,53 @@ func TestRecordAndTotalLimitsAtBoundary(t *testing.T) {
 	if _, err := ex.WriteRecord(context.Background(), Record{Kind: "x", Size: 3, Body: strings.NewReader("def")}); !errors.Is(err, ErrLimit) {
 		t.Fatalf("total limit plus one = %v", err)
 	}
+	for _, tc := range []struct {
+		name  string
+		sizes []int
+		want  error
+	}{
+		{name: "total limit minus one", sizes: []int{2, 2}},
+		{name: "total limit", sizes: []int{2, 3}},
+		{name: "total limit plus one", sizes: []int{3, 3}, want: ErrLimit},
+		{name: "total materially beyond", sizes: []int{5, 5}, want: ErrLimit},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var target bytes.Buffer
+			ex, err := NewExporter(&target, testHeader(), Limits{MaxRecords: 3, MaxRecordBytes: 5, MaxTotalBytes: 5})
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, size := range tc.sizes {
+				_, err = ex.WriteRecord(context.Background(), Record{Kind: "x", Size: uint64(size), Body: strings.NewReader(strings.Repeat("x", size))})
+				if err != nil {
+					break
+				}
+			}
+			if tc.want == nil && err != nil {
+				t.Fatalf("unexpected total error: %v", err)
+			}
+			if tc.want != nil && !errors.Is(err, tc.want) {
+				t.Fatalf("total error = %v, want %v", err, tc.want)
+			}
+		})
+	}
 
-	overflow := ex.cp
-	overflow.payloadBytes = math.MaxUint64 - 1
-	overflow.records = 0
-	overflow.nextSequence = 0
-	resume, err := ResumeExporter(&bytes.Buffer{}, overflow, Limits{MaxRecords: 1, MaxRecordBytes: 3, MaxTotalBytes: math.MaxUint64})
+	var countOut bytes.Buffer
+	counted, err := NewExporter(&countOut, testHeader(), Limits{MaxRecords: 2, MaxRecordBytes: 1, MaxTotalBytes: 3})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := resume.WriteRecord(context.Background(), Record{Kind: "x", Size: 3, Body: strings.NewReader("abc")}); !errors.Is(err, ErrLimit) {
-		t.Fatalf("overflow = %v", err)
+	for record := 0; record < 2; record++ {
+		if _, err := counted.WriteRecord(context.Background(), Record{Kind: "x", Size: 1, Body: strings.NewReader("x")}); err != nil {
+			t.Fatalf("record count %d: %v", record+1, err)
+		}
+	}
+	if _, err := counted.WriteRecord(context.Background(), Record{Kind: "x", Body: strings.NewReader("")}); !errors.Is(err, ErrLimit) {
+		t.Fatalf("record count plus one = %v", err)
+	}
+
+	if _, overflow := checkedAdd(math.MaxUint64-1, 3); !overflow {
+		t.Fatal("checkedAdd missed unsigned overflow")
 	}
 }
 
@@ -101,5 +144,33 @@ func TestImporterRejectsRecordSizeBeforeOpeningSink(t *testing.T) {
 	}
 	if begins != 0 {
 		t.Fatalf("sink began %d times", begins)
+	}
+}
+
+func TestImporterRejectsCumulativeSizeBeforeOpeningNextSink(t *testing.T) {
+	t.Parallel()
+
+	data := archiveBytes(t,
+		Record{Kind: "x", Size: 3, Body: strings.NewReader("one")},
+		Record{Kind: "x", Size: 3, Body: strings.NewReader("two")},
+	)
+	im, err := NewImporter(bytes.NewReader(data), Limits{MaxRecords: 2, MaxRecordBytes: 3, MaxTotalBytes: 5}, acceptExact)
+	if err != nil {
+		t.Fatal(err)
+	}
+	begins := 0
+	backing := &memorySink{}
+	sink := SinkFunc(func(ctx context.Context, header Header, meta RecordMeta) (RecordSink, error) {
+		begins++
+		return backing.Begin(ctx, header, meta)
+	})
+	if _, err := im.Next(context.Background(), sink); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := im.Next(context.Background(), sink); !errors.Is(err, ErrLimit) {
+		t.Fatalf("cumulative limit = %v", err)
+	}
+	if begins != 1 {
+		t.Fatalf("sink began %d times, want only first record", begins)
 	}
 }

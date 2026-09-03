@@ -7,6 +7,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"io"
+	"math"
 	"strings"
 	"testing"
 )
@@ -42,6 +43,44 @@ type oversizedCountReader struct{}
 
 func (oversizedCountReader) Read(p []byte) (int, error) { return len(p) + 1, nil }
 
+type failAfterReader struct {
+	r         io.Reader
+	remaining int
+}
+
+type cancelOnWriteSink struct {
+	cancel context.CancelFunc
+	aborts int
+}
+
+func (s *cancelOnWriteSink) Begin(context.Context, Header, RecordMeta) (RecordSink, error) {
+	return cancelOnWriteRecord{s}, nil
+}
+
+type cancelOnWriteRecord struct{ owner *cancelOnWriteSink }
+
+func (r cancelOnWriteRecord) Write(p []byte) (int, error) {
+	r.owner.cancel()
+	return len(p), nil
+}
+func (cancelOnWriteRecord) Commit(context.Context) error { return nil }
+func (r cancelOnWriteRecord) Abort(context.Context) error {
+	r.owner.aborts++
+	return nil
+}
+
+func (r *failAfterReader) Read(p []byte) (int, error) {
+	if r.remaining == 0 {
+		return 0, errors.New("reader-secret")
+	}
+	if len(p) > r.remaining {
+		p = p[:r.remaining]
+	}
+	n, err := r.r.Read(p)
+	r.remaining -= n
+	return n, err
+}
+
 func TestExporterArgumentAndIOFailures(t *testing.T) {
 	t.Parallel()
 
@@ -55,7 +94,7 @@ func TestExporterArgumentAndIOFailures(t *testing.T) {
 		t.Fatalf("invalid limits = %v", err)
 	}
 	for _, writer := range []io.Writer{&failingWriter{}, &failingWriter{short: true}} {
-		if _, err := NewExporter(writer, testHeader(), Limits{}); !errors.Is(err, ErrMalformed) || strings.Contains(err.Error(), "secret") {
+		if _, err := NewExporter(writer, testHeader(), Limits{}); !errors.Is(err, ErrIO) || strings.Contains(err.Error(), "secret") {
 			t.Fatalf("header writer = %v", err)
 		}
 	}
@@ -85,6 +124,15 @@ func TestExporterArgumentAndIOFailures(t *testing.T) {
 			t.Fatal("bad reader unexpectedly succeeded")
 		}
 	}
+	var boundaryOut bytes.Buffer
+	boundaryExporter, err := NewExporter(&boundaryOut, testHeader(), Limits{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = boundaryExporter.WriteRecord(context.Background(), Record{Kind: "x", Size: 1, Body: &failAfterReader{r: strings.NewReader("a"), remaining: 1}})
+	if !errors.Is(err, ErrIO) || strings.Contains(err.Error(), "secret") {
+		t.Fatalf("EOF probe I/O = %v", err)
+	}
 
 	canceled, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -93,7 +141,7 @@ func TestExporterArgumentAndIOFailures(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := canceledExporter.WriteRecord(canceled, Record{Kind: "x", Size: 1, Body: strings.NewReader("a")}); !errors.Is(err, context.Canceled) {
+	if _, err := canceledExporter.WriteRecord(canceled, Record{Kind: "x", Size: 1, Body: strings.NewReader("a")}); !errors.Is(err, context.Canceled) || !errors.Is(err, ErrIO) {
 		t.Fatalf("canceled write = %v", err)
 	}
 }
@@ -109,7 +157,7 @@ func TestExporterRecordAndFooterWriterFailures(t *testing.T) {
 			t.Fatal(err)
 		}
 		_, err = ex.WriteRecord(context.Background(), Record{Kind: "x", Size: 40, Body: strings.NewReader(strings.Repeat("a", 40))})
-		if !errors.Is(err, ErrMalformed) || strings.Contains(err.Error(), "secret") {
+		if !errors.Is(err, ErrIO) || strings.Contains(err.Error(), "secret") {
 			t.Fatalf("remaining %d: %v", remaining, err)
 		}
 	}
@@ -119,7 +167,7 @@ func TestExporterRecordAndFooterWriterFailures(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := ex.Finalize(); !errors.Is(err, ErrMalformed) {
+	if _, err := ex.Finalize(); !errors.Is(err, ErrIO) {
 		t.Fatalf("footer writer = %v", err)
 	}
 }
@@ -281,6 +329,24 @@ func TestImporterArgumentAndHeaderFailures(t *testing.T) {
 	}
 }
 
+func TestImporterDistinguishesIOFailureFromTruncation(t *testing.T) {
+	t.Parallel()
+
+	data := archiveBytes(t, Record{Kind: "x", Size: 1, Body: strings.NewReader("a")})
+	if _, err := NewImporter(&failAfterReader{r: bytes.NewReader(data), remaining: 5}, Limits{}, acceptExact); !errors.Is(err, ErrIO) || strings.Contains(err.Error(), "secret") {
+		t.Fatalf("header I/O = %v", err)
+	}
+	headerLen := len(encodeHeader(testHeader()))
+	prefixLen := len(encodeRecordPrefix(RecordMeta{Kind: "x", Size: 1}))
+	im, err := NewImporter(&failAfterReader{r: bytes.NewReader(data), remaining: headerLen + prefixLen}, Limits{}, acceptExact)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := im.Next(context.Background(), &memorySink{}); !errors.Is(err, ErrIO) || strings.Contains(err.Error(), "secret") {
+		t.Fatalf("payload I/O = %v", err)
+	}
+}
+
 func TestSinkFuncAndCanceledImport(t *testing.T) {
 	t.Parallel()
 
@@ -299,8 +365,25 @@ func TestSinkFuncAndCanceledImport(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if _, err := im.Next(ctx, &memorySink{}); !errors.Is(err, context.Canceled) {
+	if _, err := im.Next(ctx, &memorySink{}); !errors.Is(err, context.Canceled) || !errors.Is(err, ErrIO) {
 		t.Fatalf("canceled next = %v", err)
+	}
+}
+
+func TestImporterCancellationBetweenPayloadChunksIsIOFailure(t *testing.T) {
+	t.Parallel()
+
+	const size = copyBufferBytes + 1
+	data := archiveBytes(t, Record{Kind: "x", Size: size, Body: strings.NewReader(strings.Repeat("x", size))})
+	im, err := NewImporter(bytes.NewReader(data), Limits{}, acceptExact)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	sink := &cancelOnWriteSink{cancel: cancel}
+	_, err = im.Next(ctx, sink)
+	if !errors.Is(err, ErrIO) || !errors.Is(err, context.Canceled) || sink.aborts != 1 {
+		t.Fatalf("mid-payload cancellation = %v, aborts=%d", err, sink.aborts)
 	}
 }
 
@@ -339,5 +422,55 @@ func TestCheckpointParserClassifications(t *testing.T) {
 	}
 	if _, err := ParseCheckpoint(encoded, Limits{MaxRecordBytes: 2, MaxTotalBytes: 1}); !errors.Is(err, ErrInvalid) {
 		t.Fatalf("limits = %v", err)
+	}
+}
+
+func TestCheckpointRejectsResignedImpossibleState(t *testing.T) {
+	t.Parallel()
+
+	var out bytes.Buffer
+	ex, err := NewExporter(&out, testHeader(), Limits{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	empty, err := ex.cp.MarshalBinary()
+	if err != nil {
+		t.Fatal(err)
+	}
+	headerLen := int(binary.BigEndian.Uint16(empty[10:12]))
+	position := 12 + headerLen
+	payloadPosition := position + 16
+	offsetPosition := position + 24
+	chainPosition := position + 32
+	for _, mutate := range []func([]byte){
+		func(b []byte) { binary.BigEndian.PutUint64(b[payloadPosition:payloadPosition+8], 1) },
+		func(b []byte) { binary.BigEndian.PutUint64(b[offsetPosition:offsetPosition+8], uint64(headerLen+1)) },
+		func(b []byte) { b[chainPosition] ^= 1 },
+	} {
+		forged := append([]byte(nil), empty...)
+		mutate(forged)
+		resignCheckpoint(forged)
+		if _, err := ParseCheckpoint(forged, Limits{}); !errors.Is(err, ErrInvalid) {
+			t.Fatalf("forged empty checkpoint = %v", err)
+		}
+	}
+
+	cp, err := ex.WriteRecord(context.Background(), Record{Kind: "x", Size: 1, Body: strings.NewReader("a")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	one, err := cp.MarshalBinary()
+	if err != nil {
+		t.Fatal(err)
+	}
+	headerLen = int(binary.BigEndian.Uint16(one[10:12]))
+	offsetPosition = 12 + headerLen + 24
+	for _, offset := range []uint64{0, math.MaxUint64} {
+		forged := append([]byte(nil), one...)
+		binary.BigEndian.PutUint64(forged[offsetPosition:offsetPosition+8], offset)
+		resignCheckpoint(forged)
+		if _, err := ParseCheckpoint(forged, Limits{MaxRecords: 2, MaxRecordBytes: math.MaxInt64, MaxTotalBytes: math.MaxUint64}); !errors.Is(err, ErrInvalid) {
+			t.Fatalf("forged offset %d = %v", offset, err)
+		}
 	}
 }

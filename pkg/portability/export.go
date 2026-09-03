@@ -34,7 +34,7 @@ func NewExporter(w io.Writer, header Header, limits Limits) (*Exporter, error) {
 	encoded := encodeHeader(header)
 	n, err := writeExact(w, encoded)
 	if err != nil {
-		return nil, wrap(ErrMalformed, "write header", err)
+		return nil, wrap(ErrIO, "write header", err)
 	}
 	chain := sha256.Sum256(encoded)
 	return &Exporter{w: w, limits: normalized, cp: Checkpoint{header: header, offset: uint64(n), chain: chain}}, nil
@@ -57,6 +57,17 @@ func ResumeExporter(w io.Writer, checkpoint Checkpoint, limits Limits) (*Exporte
 		return nil, err
 	}
 	return &Exporter{w: w, limits: normalized, cp: checkpoint}, nil
+}
+
+// Checkpoint returns the last fully written record boundary, including the
+// initial header boundary and the prior safe boundary after a poisoned write.
+// Complexity: time and auxiliary space O(1), Omega(1), tight Theta(1); strings
+// share immutable Go string storage.
+func (e *Exporter) Checkpoint() Checkpoint {
+	if e == nil {
+		return Checkpoint{}
+	}
+	return e.cp
 }
 
 // WriteRecord streams one exact-length record and returns its committed
@@ -84,9 +95,17 @@ func (e *Exporter) WriteRecord(ctx context.Context, record Record) (Checkpoint, 
 		return Checkpoint{}, wrap(ErrLimit, "total payload", nil)
 	}
 	prefix := encodeRecordPrefix(meta)
+	frameBytes, overflow := checkedAdd(uint64(len(prefix)), record.Size)
+	if !overflow {
+		frameBytes, overflow = checkedAdd(frameBytes, sha256.Size)
+	}
+	nextOffset, offsetOverflow := checkedAdd(e.cp.offset, frameBytes)
+	if overflow || offsetOverflow {
+		return Checkpoint{}, wrap(ErrLimit, "stream offset", nil)
+	}
 	if _, err := writeExact(e.w, prefix); err != nil {
 		e.done = true
-		return Checkpoint{}, wrap(ErrMalformed, "write record metadata", err)
+		return Checkpoint{}, wrap(ErrIO, "write record metadata", err)
 	}
 	digest, err := e.copyPayload(ctx, record.Body, record.Size)
 	if err != nil {
@@ -95,13 +114,13 @@ func (e *Exporter) WriteRecord(ctx context.Context, record Record) (Checkpoint, 
 	}
 	if _, err := writeExact(e.w, digest[:]); err != nil {
 		e.done = true
-		return Checkpoint{}, wrap(ErrMalformed, "write record digest", err)
+		return Checkpoint{}, wrap(ErrIO, "write record digest", err)
 	}
 	e.cp.chain = nextChain(e.cp.chain, prefix, digest)
 	e.cp.records++
 	e.cp.nextSequence++
 	e.cp.payloadBytes = total
-	e.cp.offset += uint64(len(prefix)) + record.Size + sha256.Size
+	e.cp.offset = nextOffset
 	return e.cp, nil
 }
 
@@ -115,7 +134,7 @@ func (e *Exporter) copyPayload(ctx context.Context, src io.Reader, size uint64) 
 	remaining := size
 	for remaining > 0 {
 		if err := ctx.Err(); err != nil {
-			return [32]byte{}, wrap(ErrTruncated, "read payload", err)
+			return [32]byte{}, wrap(ErrIO, "read payload", err)
 		}
 		want := uint64(len(buf))
 		if remaining < want {
@@ -127,7 +146,7 @@ func (e *Exporter) copyPayload(ctx context.Context, src io.Reader, size uint64) 
 				return [32]byte{}, wrap(ErrInvalid, "payload length", nil)
 			}
 			if _, writeErr := writeExact(e.w, buf[:n]); writeErr != nil {
-				return [32]byte{}, wrap(ErrMalformed, "write payload", writeErr)
+				return [32]byte{}, wrap(ErrIO, "write payload", writeErr)
 			}
 			_, _ = h.Write(buf[:n])
 			remaining -= uint64(n)
@@ -136,16 +155,22 @@ func (e *Exporter) copyPayload(ctx context.Context, src io.Reader, size uint64) 
 			if err == io.EOF && remaining == 0 {
 				break
 			}
-			return [32]byte{}, wrap(ErrTruncated, "read payload", err)
+			if err == io.EOF {
+				return [32]byte{}, wrap(ErrTruncated, "read payload", err)
+			}
+			return [32]byte{}, wrap(ErrIO, "read payload", err)
 		}
 		if n == 0 {
-			return [32]byte{}, wrap(ErrTruncated, "read payload", io.ErrNoProgress)
+			return [32]byte{}, wrap(ErrIO, "read payload", io.ErrNoProgress)
 		}
 	}
 	var extra [1]byte
 	n, err := src.Read(extra[:])
-	if n != 0 || (err != nil && err != io.EOF) || (n == 0 && err == nil) {
-		return [32]byte{}, wrap(ErrInvalid, "payload length", err)
+	if n != 0 {
+		return [32]byte{}, wrap(ErrInvalid, "payload length", nil)
+	}
+	if err != io.EOF {
+		return [32]byte{}, wrap(ErrIO, "check payload boundary", err)
 	}
 	var digest [32]byte
 	copy(digest[:], h.Sum(nil))
@@ -162,7 +187,7 @@ func (e *Exporter) Finalize() (Manifest, error) {
 	e.done = true
 	manifest := Manifest{Records: e.cp.records, PayloadBytes: e.cp.payloadBytes, Chain: e.cp.chain}
 	if _, err := writeExact(e.w, encodeFooter(manifest)); err != nil {
-		return Manifest{}, wrap(ErrMalformed, "write manifest", err)
+		return Manifest{}, wrap(ErrIO, "write manifest", err)
 	}
 	return manifest, nil
 }

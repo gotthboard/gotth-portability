@@ -51,7 +51,9 @@ application.
 Exporters accept one `Record` at a time and return a `Checkpoint` after each
 complete frame. Importers ask a consumer `Sink` to begin a staged record, copy
 and verify its payload, and then commit it. `Compatibility` is called on the
-header before any sink is opened. See the package documentation and
+header before any sink is opened. `Exporter.Checkpoint` and
+`Importer.Checkpoint` expose the last safe boundary even after a failed first
+record, which is required for truncation/replay recovery. See the package documentation and
 `docs/implementation-spec.md` for the exact V1 wire contract.
 
 ## Non-goals

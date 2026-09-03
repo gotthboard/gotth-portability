@@ -78,6 +78,17 @@ func (i *Importer) Header() Header {
 	return i.cp.header
 }
 
+// Checkpoint returns the last consumer-committed record boundary, including
+// the initial header boundary and the prior boundary after any failed attempt.
+// Complexity: time and auxiliary space O(1), Omega(1), tight Theta(1); strings
+// share immutable Go string storage.
+func (i *Importer) Checkpoint() Checkpoint {
+	if i == nil {
+		return Checkpoint{}
+	}
+	return i.cp
+}
+
 // Next validates and commits one record or returns ErrComplete after validating
 // the manifest and required EOF. A non-completion failure poisons this importer.
 // Complexity: record time O(k+r+n)+R(n)+W(n)+S, Omega(k+r), tight
@@ -95,7 +106,7 @@ func (i *Importer) Next(ctx context.Context, sink Sink) (Checkpoint, error) {
 		return Checkpoint{}, wrap(ErrFinalized, "read record", nil)
 	}
 	if err := ctx.Err(); err != nil {
-		return Checkpoint{}, wrap(ErrTruncated, "read frame", err)
+		return Checkpoint{}, wrap(ErrIO, "read frame", err)
 	}
 	var frame [1]byte
 	if err := i.readExact(frame[:], "read frame"); err != nil {
@@ -185,7 +196,7 @@ func (i *Importer) copyPayload(ctx context.Context, dst io.Writer, size uint64) 
 	remaining := size
 	for remaining > 0 {
 		if err := ctx.Err(); err != nil {
-			return [32]byte{}, wrap(ErrTruncated, "read payload", err)
+			return [32]byte{}, wrap(ErrIO, "read payload", err)
 		}
 		want := uint64(len(buf))
 		if remaining < want {
@@ -265,10 +276,12 @@ func (i *Importer) readFooter() error {
 	}
 	var trailing [1]byte
 	n, readErr := i.r.Read(trailing[:])
-	if n != 0 || (readErr != nil && readErr != io.EOF) || (n == 0 && readErr == nil) {
-		return wrap(ErrMalformed, "trailing archive data", readErr)
+	if n != 0 {
+		return wrap(ErrMalformed, "trailing archive data", nil)
 	}
-	i.readOffset += uint64(n)
+	if readErr != io.EOF {
+		return wrap(ErrIO, "read trailing archive data", readErr)
+	}
 	i.manifest = Manifest{Records: records, PayloadBytes: payloadBytes, Chain: chain}
 	i.complete = true
 	i.done = true
@@ -281,9 +294,16 @@ func (i *Importer) readFooter() error {
 // delegated reader cost.
 func (i *Importer) readExact(p []byte, op string) error {
 	n, err := io.ReadFull(i.r, p)
-	i.readOffset += uint64(n)
+	nextOffset, overflow := checkedAdd(i.readOffset, uint64(n))
+	if overflow {
+		return wrap(ErrLimit, "stream offset", nil)
+	}
+	i.readOffset = nextOffset
 	if err != nil {
-		return wrap(ErrTruncated, op, err)
+		if err == io.EOF || err == io.ErrUnexpectedEOF {
+			return wrap(ErrTruncated, op, err)
+		}
+		return wrap(ErrIO, op, err)
 	}
 	return nil
 }

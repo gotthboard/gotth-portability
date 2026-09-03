@@ -85,3 +85,13 @@ func checkedAdd(a, b uint64) (uint64, bool) {
 	c := a + b
 	return c, c < a
 }
+
+// checkedMul returns a*b and whether unsigned overflow occurred.
+// Complexity: time O(1), Omega(1), tight Theta(1); auxiliary space O(1),
+// Omega(1), tight Theta(1).
+func checkedMul(a, b uint64) (uint64, bool) {
+	if a != 0 && b > ^uint64(0)/a {
+		return 0, true
+	}
+	return a * b, false
+}

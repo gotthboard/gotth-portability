@@ -6,6 +6,7 @@ var (
 	ErrInvalid      = errors.New("portability: invalid argument")
 	ErrMalformed    = errors.New("portability: malformed stream")
 	ErrTruncated    = errors.New("portability: truncated stream")
+	ErrIO           = errors.New("portability: I/O failure")
 	ErrIncompatible = errors.New("portability: incompatible archive")
 	ErrLimit        = errors.New("portability: limit exceeded")
 	ErrIntegrity    = errors.New("portability: integrity failure")

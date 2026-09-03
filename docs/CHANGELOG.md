@@ -6,9 +6,42 @@ Released sections use Semantic Versioning; unreleased work remains under
 
 ## Unreleased
 
-### 2026-09-03 12:10 CDT — Implement bounded resumable portability streams
+### 2026-09-03 12:40 CDT — Record worker verification evidence
 
 Commit: current commit; hash assigned by Git after commit
+
+Affected files:
+
+- `pkg/portability/**`
+- `docs/performance.md`, `docs/verification.md`
+- `workflow/COVERAGE.md`
+- `workflow/features/portable-v1/evidence/verification.md`
+
+Explanation:
+
+Pin empty and non-empty V1 archive bytes plus persistent checkpoint bytes with
+literal golden tests. Harden resume checkpoints against impossible counters,
+chains, offsets, and arithmetic overflow; expose the prior safe checkpoint even
+after first-record failure; prove idempotent replay after an unknown sink commit
+outcome; and distinguish redacted I/O failures from malformed or truncated
+input. Record coverage, fuzz, repeated-race, external-consumer,
+bounded-allocation, percentile, and revision-matched graph evidence. Keep
+workflow state active because independent orchestrator admission remains
+outstanding.
+
+Verification:
+
+- gates and artifact hashes recorded in feature evidence
+
+Risks / non-goals:
+
+- Performance data comes from an uncontrolled local host and establishes no
+  consumer SLO.
+- This evidence does not tag, release, push, or independently admit the API.
+
+### 2026-09-03 12:10 CDT — Implement bounded resumable portability streams
+
+Commit: `a4b39e8d20caa140d9d5dd10fdd0e5a41ad0eff4`
 
 Affected files:
 
@@ -42,7 +75,7 @@ Risks / non-goals:
 
 ### 2026-09-03 10:45 CDT — Define the portable streaming contract
 
-Commit: current commit; hash assigned by Git after commit
+Commit: `d827d1b76c7f3f6c0a3ddc965a15bfadb0fddbed`
 
 Affected files:
 
@@ -71,7 +104,7 @@ Risks / non-goals:
 
 ### 2026-09-03 00:42 CDT — Establish GitHub public distribution
 
-Commit: current commit; hash assigned by Git after commit
+Commit: `64ac2f3f52f05644c1e8584b3a9044d5dda1cdd1`
 
 Affected files:
 
