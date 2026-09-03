@@ -44,10 +44,11 @@ func NewExporter(ctx context.Context, w io.Writer, header Header, limits Limits)
 
 // ResumeExporter restores a committed boundary. The caller must position and,
 // after a failed prior attempt, truncate the writer to checkpoint.Offset.
-// Complexity: time O(a+s), Omega(1), tight Theta(a+s) for valid state;
-// auxiliary space O(a+s), Omega(1), tight Theta(a+s) for valid state because
-// checkpoint validation reconstructs the canonical header; variables: a and s
-// are header identifier lengths.
+// Complexity: time O(a+s), Omega(1), with tight Theta(a+s) for a non-nil
+// Writer and valid checkpoint; auxiliary space O(a+s), Omega(1), with tight
+// Theta(a+s) on that path because checkpoint validation reconstructs the
+// canonical header. Nil-Writer and constant-time invalid-limit/checkpoint
+// paths can take tight Theta(1); variables a/s are header identifier lengths.
 func ResumeExporter(w io.Writer, checkpoint Checkpoint, limits Limits) (*Exporter, error) {
 	if w == nil {
 		return nil, wrap(ErrInvalid, "writer", nil)
@@ -206,8 +207,11 @@ func (e *Exporter) copyPayload(ctx context.Context, src io.Reader, size uint64) 
 }
 
 // Finalize writes the final manifest exactly once.
-// Complexity: time O(1)+W(1), Omega(1), tight Theta(1)+W(1); auxiliary space
-// O(1), Omega(1), tight Theta(1); W is one fixed-size delegated write cost.
+// Complexity: general time O(1)+W(1), Omega(1); a live, non-nil-context,
+// non-canceled path reaches one fixed-size Writer call and has tight
+// Theta(1)+W(1), while rejection paths skip W and take tight Theta(1).
+// Auxiliary space is O(1), Omega(1), tight Theta(1); W is the cost of zero or
+// one delegated Writer call.
 func (e *Exporter) Finalize(ctx context.Context) (Manifest, error) {
 	if e == nil || e.done {
 		return Manifest{}, wrap(ErrFinalized, "finalize", nil)

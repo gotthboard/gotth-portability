@@ -8,17 +8,51 @@ uses the named commit's Git author time, rendered to the minute in CDT.
 
 ## Unreleased
 
-### 2026-09-03 14:22 CDT — Close constructor-cost and chronology audit
+### 2026-09-03 14:58 CDT — Close resume-contract and provenance audit
 
-Implementation commit: `63b7c8af4450e577d8f834d7592fcea0b32d6a3d`.
-Evidence commit: this documentation-only commit. The heading uses the verified
-implementation commit author time.
+Commit: current commit; hash assigned by Git after commit
 
 Affected files:
 
-- `pkg/portability/export.go`
 - `docs/CHANGELOG.md`
-- workflow exact evidence record
+- `pkg/portability/export.go`
+- `pkg/portability/import.go`
+- `pkg/portability/import_test.go`
+- `pkg/portability/wire.go`
+
+Explanation:
+
+Qualify the remaining I/O and resume complexity contracts so early rejection
+never claims a skipped delegated call. Add direct `ResumeImporter` tests for
+argument and validation order, pre- and post-compatibility cancellation,
+redacted incompatible causes, zero reader I/O, and exact state restoration.
+Replace historical changelog globs and narrative file claims with the exact
+file union of every commit each entry names.
+
+Verification:
+
+- focused resume tests under race
+- exact named-commit file and author-time audit
+- full format, diff, vet, race, coverage, fuzz, and build gates
+
+Risks / non-goals:
+
+- Runtime behavior and the V1 wire format are unchanged.
+- No downstream consumer schema or pin is fabricated. Workflow stays
+  `in_progress` and unreleased.
+
+### 2026-09-03 14:22 CDT — Close constructor-cost and chronology audit
+
+Implementation commit: `63b7c8af4450e577d8f834d7592fcea0b32d6a3d`.
+Evidence commit: `b1f718af7ceba135d7deb289822bf87306ca9fbf`. The heading
+uses the implementation commit's verified author time.
+
+Affected files:
+
+- `docs/CHANGELOG.md`
+- `docs/verification.md`
+- `pkg/portability/export.go`
+- `workflow/features/portable-v1/evidence/verification.md`
 
 Explanation:
 
@@ -43,14 +77,22 @@ Risks / non-goals:
 
 ### 2026-09-03 14:06 CDT — Specify retry and poisoning boundaries
 
-Implementation commit: `fa12f158ed4c0cf97a95d2cc67da5a0a1a986d40`.
-Evidence commit: this documentation-only commit. The heading uses the verified
-implementation commit author time.
+Implementation commits: `8d7836c09cf5e35c5088065c0a3906ae1ddb3e2e`
+and `fa12f158ed4c0cf97a95d2cc67da5a0a1a986d40`.
+Evidence commit: `c510f4b1ccf7881658bcb386f9d13e8dd6abc288`. The heading
+uses the later implementation commit's verified author time.
 
 Affected files:
 
-- `pkg/portability` public comments and failure-path tests
-- `README.md`, implementation specification, and verification evidence
+- `README.md`
+- `docs/CHANGELOG.md`
+- `docs/implementation-spec.md`
+- `docs/verification.md`
+- `pkg/portability/checkpoint.go`
+- `pkg/portability/export.go`
+- `pkg/portability/failure_paths_test.go`
+- `pkg/portability/import.go`
+- `workflow/features/portable-v1/evidence/verification.md`
 
 Explanation:
 
@@ -77,14 +119,23 @@ Risks / non-goals:
 ### 2026-09-03 13:19 CDT — Preserve Begin cancellation and bind raw evidence
 
 Implementation commit: `d22c2de207a3a6b046b7ed96aa72d7640ca616f0`.
-Evidence commit: this documentation-only commit. The heading uses the verified
-implementation commit author time.
+Evidence commit: `d2bd5ea199964a4eea8a6462e80618e49f468f80`. The heading
+uses the implementation commit's verified author time.
 
 Affected files:
 
-- `pkg/portability/**`
-- `README.md`, architecture/spec/performance/verification documentation
-- workflow exact evidence record
+- `README.md`
+- `docs/CHANGELOG.md`
+- `docs/architecture.md`
+- `docs/implementation-spec.md`
+- `docs/performance.md`
+- `docs/verification.md`
+- `pkg/portability/checkpoint.go`
+- `pkg/portability/export.go`
+- `pkg/portability/hardening_test.go`
+- `pkg/portability/import.go`
+- `pkg/portability/types.go`
+- `workflow/features/portable-v1/evidence/verification.md`
 
 Explanation:
 
@@ -117,9 +168,23 @@ uses that evidence commit's verified author time.
 
 Affected files:
 
-- `pkg/portability/**`
-- `README.md`, architecture/spec/runtime/performance/verification documentation
-- workflow coverage and exact evidence records
+- `README.md`
+- `docs/CHANGELOG.md`
+- `docs/architecture.md`
+- `docs/implementation-spec.md`
+- `docs/performance.md`
+- `docs/runtime-boundary.md`
+- `docs/verification.md`
+- `pkg/portability/errors.go`
+- `pkg/portability/export.go`
+- `pkg/portability/fuzz_test.go`
+- `pkg/portability/hardening_test.go`
+- `pkg/portability/import.go`
+- `pkg/portability/types.go`
+- `pkg/portability/values_test.go`
+- `pkg/portability/wire.go`
+- `workflow/COVERAGE.md`
+- `workflow/features/portable-v1/evidence/verification.md`
 
 Explanation:
 
@@ -153,9 +218,32 @@ The heading uses that evidence commit's verified author time.
 
 Affected files:
 
-- `pkg/portability/**`
-- `README.md`, `docs/architecture.md`, `docs/implementation-spec.md`
-- `docs/runtime-boundary.md`, `docs/performance.md`, `docs/verification.md`
+- `README.md`
+- `docs/CHANGELOG.md`
+- `docs/architecture.md`
+- `docs/implementation-spec.md`
+- `docs/performance.md`
+- `docs/runtime-boundary.md`
+- `docs/verification.md`
+- `pkg/portability/boundary_test.go`
+- `pkg/portability/checkpoint.go`
+- `pkg/portability/checkpoint_test.go`
+- `pkg/portability/errors.go`
+- `pkg/portability/export.go`
+- `pkg/portability/export_test.go`
+- `pkg/portability/failure_paths_test.go`
+- `pkg/portability/fuzz_test.go`
+- `pkg/portability/hardening_test.go`
+- `pkg/portability/import.go`
+- `pkg/portability/import_test.go`
+- `pkg/portability/performance_test.go`
+- `pkg/portability/public_api_test.go`
+- `pkg/portability/streaming_test.go`
+- `pkg/portability/types.go`
+- `pkg/portability/values_test.go`
+- `pkg/portability/wire.go`
+- `workflow/COVERAGE.md`
+- `workflow/features/portable-v1/evidence/verification.md`
 
 Explanation:
 
@@ -237,7 +325,9 @@ Commit: `72a5c318cb58c4d2b6d787cc0c66eb753e51d31e`
 
 Affected files:
 
-- `docs/performance.md`, `docs/verification.md`, `docs/CHANGELOG.md`
+- `docs/CHANGELOG.md`
+- `docs/performance.md`
+- `docs/verification.md`
 - `workflow/COVERAGE.md`
 - `workflow/features/portable-v1/evidence/verification.md`
 
@@ -263,8 +353,20 @@ Commit: `5a291d9752839333ba033005b21c80686836b9e3`
 
 Affected files:
 
-- `pkg/portability/**`
-- `docs/performance.md`, `docs/verification.md`
+- `README.md`
+- `docs/CHANGELOG.md`
+- `docs/implementation-spec.md`
+- `docs/performance.md`
+- `docs/verification.md`
+- `pkg/portability/boundary_test.go`
+- `pkg/portability/checkpoint.go`
+- `pkg/portability/errors.go`
+- `pkg/portability/export.go`
+- `pkg/portability/export_test.go`
+- `pkg/portability/failure_paths_test.go`
+- `pkg/portability/import.go`
+- `pkg/portability/import_test.go`
+- `pkg/portability/wire.go`
 - `workflow/COVERAGE.md`
 - `workflow/features/portable-v1/evidence/verification.md`
 
@@ -296,9 +398,29 @@ Commit: `a4b39e8d20caa140d9d5dd10fdd0e5a41ad0eff4`
 
 Affected files:
 
-- `pkg/portability/**`
-- `README.md`, `CONTRIBUTING.md`, `SECURITY.md`
-- `docs/distribution.md`, `docs/RELEASING.md`
+- `CONTRIBUTING.md`
+- `README.md`
+- `SECURITY.md`
+- `docs/CHANGELOG.md`
+- `docs/RELEASING.md`
+- `docs/distribution.md`
+- `pkg/portability/boundary_test.go`
+- `pkg/portability/checkpoint.go`
+- `pkg/portability/checkpoint_test.go`
+- `pkg/portability/doc.go`
+- `pkg/portability/errors.go`
+- `pkg/portability/export.go`
+- `pkg/portability/export_test.go`
+- `pkg/portability/failure_paths_test.go`
+- `pkg/portability/fuzz_test.go`
+- `pkg/portability/import.go`
+- `pkg/portability/import_test.go`
+- `pkg/portability/performance_test.go`
+- `pkg/portability/public_api_test.go`
+- `pkg/portability/streaming_test.go`
+- `pkg/portability/types.go`
+- `pkg/portability/values_test.go`
+- `pkg/portability/wire.go`
 
 Explanation:
 
@@ -330,11 +452,24 @@ Commit: `d827d1b76c7f3f6c0a3ddc965a15bfadb0fddbed`
 
 Affected files:
 
-- `LICENSE`, `.go-version`, `go.mod`, `Makefile`
-- `docs/prd.md`, `docs/architecture.md`, `docs/implementation-spec.md`
-- `docs/feature-plan.md`, `docs/runtime-boundary.md`
-- `docs/performance.md`, `docs/verification.md`
-- `workflow.toml`, `workflow/**`, `workflow.events.jsonl`
+- `.gitignore`
+- `.go-version`
+- `LICENSE`
+- `Makefile`
+- `docs/CHANGELOG.md`
+- `docs/architecture.md`
+- `docs/feature-plan.md`
+- `docs/implementation-spec.md`
+- `docs/performance.md`
+- `docs/prd.md`
+- `docs/runtime-boundary.md`
+- `docs/verification.md`
+- `go.mod`
+- `workflow.events.jsonl`
+- `workflow.toml`
+- `workflow/COVERAGE.md`
+- `workflow/README.md`
+- `workflow/features/portable-v1/README.md`
 
 Explanation:
 
@@ -353,28 +488,24 @@ Risks / non-goals:
 - No implementation or release is claimed by this contract commit.
 - Application schemas and product policy remain consumer-owned.
 
-### 2026-09-03 01:07 CDT — Establish GitHub public distribution
+### 2026-09-03 01:07 CDT — Normalize release-policy formatting
 
 Commit: `64ac2f3f52f05644c1e8584b3a9044d5dda1cdd1`
 
 Affected files:
 
-- `README.md`
-- `CONTRIBUTING.md`
-- `SECURITY.md`
-- `docs/distribution.md`
 - `docs/RELEASING.md`
 
 Explanation:
 
-Declare GitHub as the public distribution endpoint while retaining Forgejo as
-canonical development, define maturity and support honestly, and document the
-independent release process. The reserved namespace remains a documentation-only placeholder and makes no API or release claim.
+Normalize Markdown formatting in the existing release policy. This commit does
+not introduce or change distribution behavior, repository ownership, release
+authority, or API maturity.
 
 Verification:
 
-- exact old-import search
-- documentation contract audit
+- exact named-commit file audit
+- documentation diff inspection
 
 Risks / non-goals:
 

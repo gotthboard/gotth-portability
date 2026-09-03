@@ -230,6 +230,147 @@ func TestImporterResumeAtCheckpoint(t *testing.T) {
 	}
 }
 
+func TestResumeImporterRejectsArgumentsLimitsCheckpointAndCancellationWithoutIO(t *testing.T) {
+	var archive bytes.Buffer
+	ex, err := NewExporter(context.Background(), &archive, testHeader(), Limits{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkpoint := ex.Checkpoint()
+
+	t.Run("nil context", func(t *testing.T) {
+		input := &countingReader{r: bytes.NewReader(nil)}
+		called := false
+		_, err := ResumeImporter(nil, input, checkpoint, Limits{}, func(context.Context, Header) error {
+			called = true
+			return nil
+		})
+		if !errors.Is(err, ErrInvalid) || input.calls != 0 || called {
+			t.Fatalf("resume = %v, reads=%d, compatibility=%v", err, input.calls, called)
+		}
+	})
+
+	t.Run("nil reader", func(t *testing.T) {
+		called := false
+		_, err := ResumeImporter(context.Background(), nil, checkpoint, Limits{}, func(context.Context, Header) error {
+			called = true
+			return nil
+		})
+		if !errors.Is(err, ErrInvalid) || called {
+			t.Fatalf("resume = %v, compatibility=%v", err, called)
+		}
+	})
+
+	t.Run("nil compatibility", func(t *testing.T) {
+		input := &countingReader{r: bytes.NewReader(nil)}
+		_, err := ResumeImporter(context.Background(), input, checkpoint, Limits{}, nil)
+		if !errors.Is(err, ErrInvalid) || input.calls != 0 {
+			t.Fatalf("resume = %v, reads=%d", err, input.calls)
+		}
+	})
+
+	t.Run("limits precede checkpoint context and compatibility", func(t *testing.T) {
+		input := &countingReader{r: bytes.NewReader(nil)}
+		badCheckpoint := checkpoint
+		badCheckpoint.offset = 0
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		called := false
+		_, err := ResumeImporter(ctx, input, badCheckpoint, Limits{MaxRecordBytes: 2, MaxTotalBytes: 1}, func(context.Context, Header) error {
+			called = true
+			return nil
+		})
+		if !errors.Is(err, ErrInvalid) || input.calls != 0 || called {
+			t.Fatalf("resume = %v, reads=%d, compatibility=%v", err, input.calls, called)
+		}
+	})
+
+	t.Run("checkpoint precedes context and compatibility", func(t *testing.T) {
+		input := &countingReader{r: bytes.NewReader(nil)}
+		badCheckpoint := checkpoint
+		badCheckpoint.offset = 0
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		called := false
+		_, err := ResumeImporter(ctx, input, badCheckpoint, Limits{}, func(context.Context, Header) error {
+			called = true
+			return nil
+		})
+		if !errors.Is(err, ErrInvalid) || input.calls != 0 || called {
+			t.Fatalf("resume = %v, reads=%d, compatibility=%v", err, input.calls, called)
+		}
+	})
+
+	t.Run("entry cancellation precedes compatibility", func(t *testing.T) {
+		input := &countingReader{r: bytes.NewReader(nil)}
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		called := false
+		_, err := ResumeImporter(ctx, input, checkpoint, Limits{}, func(context.Context, Header) error {
+			called = true
+			return nil
+		})
+		if !errors.Is(err, ErrIO) || !causeIs(err, context.Canceled) || input.calls != 0 || called {
+			t.Fatalf("resume = %v, reads=%d, compatibility=%v", err, input.calls, called)
+		}
+	})
+}
+
+func TestResumeImporterCompatibilityFailureCancellationAndRestoration(t *testing.T) {
+	var archive bytes.Buffer
+	ex, err := NewExporter(context.Background(), &archive, testHeader(), Limits{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkpoint := ex.Checkpoint()
+
+	t.Run("incompatible is classified redacted and explicitly caused", func(t *testing.T) {
+		input := &countingReader{r: bytes.NewReader(nil)}
+		secret := errors.New("resume-schema-secret")
+		_, err := ResumeImporter(context.Background(), input, checkpoint, Limits{}, func(_ context.Context, header Header) error {
+			if header != testHeader() {
+				t.Fatalf("compatibility header = %#v", header)
+			}
+			return secret
+		})
+		if !errors.Is(err, ErrIncompatible) || errors.Is(err, secret) || !causeIs(err, secret) || strings.Contains(err.Error(), "secret") || input.calls != 0 {
+			t.Fatalf("resume = %v, reads=%d", err, input.calls)
+		}
+	})
+
+	t.Run("cancellation after compatibility is IO failure", func(t *testing.T) {
+		input := &countingReader{r: bytes.NewReader(nil)}
+		ctx, cancel := context.WithCancel(context.Background())
+		called := 0
+		_, err := ResumeImporter(ctx, input, checkpoint, Limits{}, func(context.Context, Header) error {
+			called++
+			cancel()
+			return nil
+		})
+		if !errors.Is(err, ErrIO) || !causeIs(err, context.Canceled) || input.calls != 0 || called != 1 {
+			t.Fatalf("resume = %v, reads=%d, compatibility calls=%d", err, input.calls, called)
+		}
+	})
+
+	t.Run("success restores exact committed state without reading", func(t *testing.T) {
+		input := &countingReader{r: bytes.NewReader(nil)}
+		called := 0
+		resumed, err := ResumeImporter(context.Background(), input, checkpoint, Limits{}, func(_ context.Context, header Header) error {
+			called++
+			if header != checkpoint.Header() {
+				t.Fatalf("compatibility header = %#v", header)
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if input.calls != 0 || called != 1 || resumed.Header() != checkpoint.Header() || resumed.Checkpoint() != checkpoint || resumed.readOffset != checkpoint.Offset() {
+			t.Fatalf("reads=%d compatibility=%d importer=%#v", input.calls, called, resumed)
+		}
+	})
+}
+
 func TestImporterEmptyArchive(t *testing.T) {
 	t.Parallel()
 

@@ -58,11 +58,13 @@ func NewImporter(ctx context.Context, r io.Reader, limits Limits, compatibility 
 
 // ResumeImporter restores a validated committed boundary. The caller must
 // position the reader at checkpoint.Offset.
-// Complexity: time O(a+s)+C, Omega(1), tight Theta(a+s)+C for valid state;
-// local auxiliary space O(a+s), Omega(1), tight Theta(a+s) for valid state,
-// plus delegated Compatibility working space, because checkpoint validation
-// reconstructs the canonical header; variables: a/s identifier lengths and C
-// delegated compatibility cost.
+// Complexity: general time O(a+s)+C, Omega(1); a non-nil-argument, valid-limit,
+// valid-checkpoint path that reaches Compatibility has tight Theta(a+s)+C,
+// while argument, limit, checkpoint, and entry-cancellation rejection can skip
+// C. Local auxiliary space is O(a+s), Omega(1), with tight Theta(a+s) when
+// checkpoint validation reconstructs a valid canonical header, plus delegated
+// Compatibility working space only when called. Variables a/s are identifier
+// lengths and C is the cost of zero or one Compatibility call.
 func ResumeImporter(ctx context.Context, r io.Reader, checkpoint Checkpoint, limits Limits, compatibility Compatibility) (*Importer, error) {
 	if ctx == nil || r == nil || compatibility == nil {
 		return nil, wrap(ErrInvalid, "context, reader, or compatibility", nil)
@@ -397,8 +399,11 @@ func (i *Importer) readExact(ctx context.Context, p []byte, op string) error {
 }
 
 // readUint64 reads one canonical unsigned integer.
-// Complexity: time O(1)+R(1), Omega(1), tight Theta(1)+R(1); auxiliary space
-// O(1), Omega(1), tight Theta(1); R is one fixed-size delegated read.
+// Complexity: time O(1)+R(8,E), Omega(1), with tight Theta(1)+R(8,E) on
+// success; auxiliary space O(1), Omega(1), tight Theta(1). R(8,E) is the
+// aggregate delegated Reader cost of the bounded exact-read loop for eight
+// bytes, including legal short and at most E consecutive empty results; it is
+// not necessarily one Reader call.
 func (i *Importer) readUint64(ctx context.Context, op string) (uint64, error) {
 	var b [8]byte
 	if err := i.readExact(ctx, b[:], op); err != nil {

@@ -79,9 +79,11 @@ func writeExact(w io.Writer, p []byte) (int, error) {
 // writeExactContext brackets the single external Writer call with cancellation
 // checks. A cancellation observed after the call means its outcome may exist,
 // so callers must not advance a committed checkpoint.
-// Complexity: for n=len(p), time O(1)+W(n), Omega(1), tight Theta(1)+W(n),
-// with exactly one delegated Writer call; auxiliary space O(1), Omega(1),
-// tight Theta(1). A context cannot interrupt that call while it is in flight.
+// Complexity: for n=len(p), general time O(1)+W(n), Omega(1); a path that
+// reaches the Writer has tight Theta(1)+W(n), while entry cancellation has
+// tight Theta(1) and skips W. Auxiliary space is O(1), Omega(1), tight
+// Theta(1). W is the cost of zero or one delegated Writer call; a context
+// cannot interrupt that call while it is in flight.
 func writeExactContext(ctx context.Context, w io.Writer, p []byte) (int, error) {
 	if err := ctx.Err(); err != nil {
 		return 0, err
