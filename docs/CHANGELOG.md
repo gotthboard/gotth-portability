@@ -6,9 +6,33 @@ Released sections use Semantic Versioning; unreleased work remains under
 
 ## Unreleased
 
-### 2026-09-03 14:05 CDT — Close evidence reproducibility gaps
+### 2026-09-03 14:20 CDT — Bind the external-consumer proof
 
 Commit: current commit; hash assigned by Git after commit
+
+Affected files:
+
+- `docs/CHANGELOG.md`
+- `workflow/features/portable-v1/evidence/verification.md`
+
+Explanation:
+
+Replace the insufficient external-consumer log with a command-traced proof that
+prints and hashes the consumer module, resolves its local replacement, binds the
+replacement repository to clean detached source `5a291d9`, and runs race, vet,
+and build.
+
+Verification:
+
+- retained proof log SHA-256 and direct evidence audit
+
+Risks / non-goals:
+
+- Evidence-only; implementation and workflow state remain unchanged.
+
+### 2026-09-03 14:05 CDT — Close evidence reproducibility gaps
+
+Commit: `a6d120f95f9cd8e359731f79584773575c1a2da5`
 
 Affected files:
 

@@ -70,8 +70,11 @@ detached at the exact hardened source and passed race, vet, and build. It
 constructs exporter/importer, persists/parses a checkpoint, implements the
 staged sink interfaces, and observes explicit completion. The no-local clone
 itself passed readonly race, vet, and build with a clean detached status. Both
-temporary directories are disposable; command-traced result logs are retained
-and hashed below.
+temporary directories are disposable. The final proof log prints and hashes
+the external module files, resolves the replacement path, records the replaced
+repository's exact detached HEAD and clean status, prints `go list -m -json
+all`, and traces race, vet, and build. Result logs are retained and hashed
+below.
 
 ## Performance evidence
 
@@ -103,7 +106,7 @@ consumer error text remains absent from the public error string.
 | `/tmp/gotth-portability-performance-5a291d9.log` | `0eb05713918d47aa1fdabe2792e55ca5bf4e08b30a19e338fa8553d606b1af4f` |
 | `/tmp/gotth-portability-bench-5a291d9.log` | `bcf3a1077d8a0f81c6dfe685653aad8cd21bf61e677f6c7a8c8f278d8f9dee93` |
 | `/tmp/gotth-portability-clean-clone-5a291d9.log` | `45917f5efaaa532268840445242710d831b9fe55d2196ba703f789fb49b61a81` |
-| `/tmp/gotth-portability-external-consumer-5a291d9.log` | `4d541d15bcd9ade61b10f18aa76d34e0cde57524088979b25d233e03f48f9b73` |
+| `/tmp/gotth-portability-external-proof-5a291d9.log` | `0b56406122be5fa1de5427cc32b7944d90d69552fb6a92a0664c44dc8a24cab4` |
 
 ## Graph review
 
@@ -126,9 +129,10 @@ The first fresh worker Judge pass failed on weak checkpoint invariants, missing
 prior-checkpoint recovery, incomplete unknown-commit modeling, dishonest I/O
 classification, incomplete wire/boundary pins, and stale evidence. Those code
 and test findings are corrected. A fresh pass found no remaining code blocker;
-its evidence audit then failed on missing fuzz commands and missing retained
-clean-clone/external-consumer logs. Those reproducibility gaps are corrected in
-the current bookkeeping commit.
+its evidence audits then failed on missing fuzz commands, missing retained
+clean-clone/external-consumer logs, and an external log that did not bind its
+module replacement to the exact tested source. Those reproducibility gaps are
+corrected in the current bookkeeping commit.
 
 ## Remaining gate
 
