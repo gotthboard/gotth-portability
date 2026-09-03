@@ -50,13 +50,13 @@ callback allocations.
 - `Next` stages, streams, validates, and commits one record. It returns
   `ErrComplete` only after footer and EOF validation. `Manifest` fails until
   that explicit completion state exists.
-- `WriteRecord` argument, entry-cancellation, metadata, limit, and offset
-  preflight failures happen before record output and leave the exporter
-  reusable. On a live importer, `Next` nil context/sink and entry-cancellation
-  preflight failures consume no frame and leave it reusable. Once preflight
-  passes and record/frame I/O begins, any non-completion failure poisons that
-  object even if cancellation prevents the first callback; recovery resumes
-  from its prior checkpoint.
+- On a live exporter, `WriteRecord` nil context/body, entry-cancellation,
+  metadata, limit, and offset preflight failures happen before record output
+  and leave it reusable. On a live importer, `Next` nil context/sink and
+  entry-cancellation preflight failures consume no frame and leave it reusable.
+  Once preflight passes and record/frame I/O begins, any non-completion failure
+  poisons that object even if cancellation prevents the first callback;
+  recovery resumes from its prior checkpoint.
 - Failures before commit call `Abort` with a cancellation-independent context
   whose deadline is `AbortTimeout`. A commit error, or cancellation observed
   after a commit call, has unknown outcome and does not call `Abort` or advance

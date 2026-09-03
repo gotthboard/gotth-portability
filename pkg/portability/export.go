@@ -73,11 +73,11 @@ func (e *Exporter) Checkpoint() Checkpoint {
 }
 
 // WriteRecord streams one exact-length record and returns its committed
-// boundary. Argument, entry-cancellation, metadata, limit, and offset preflight
-// failures occur before record output and leave the exporter reusable. Once
-// preflight passes and record-frame I/O begins, any failure poisons the exporter,
-// even if cancellation prevents the first Writer callback; recover from the
-// prior checkpoint.
+// boundary. On a live exporter, nil context/body, entry-cancellation, metadata,
+// limit, and offset preflight failures occur before record output and leave it
+// reusable. Once preflight passes and record-frame I/O begins, any failure
+// poisons the exporter, even if cancellation prevents the first Writer callback;
+// recover from the prior checkpoint.
 // Complexity: time O(k+r+n)+R(n)+W(n), Omega(1), with tight
 // Theta(k+r+n)+R(n)+W(n) on success. The first non-empty record adds one retained
 // 32KiB buffer; empty and later successful records add only Theta(k+r) local
