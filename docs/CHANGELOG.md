@@ -6,9 +6,33 @@ Released sections use Semantic Versioning; unreleased work remains under
 
 ## Unreleased
 
-### 2026-09-03 13:25 CDT — Finalize revision-matched worker evidence
+### 2026-09-03 14:05 CDT — Close evidence reproducibility gaps
 
 Commit: current commit; hash assigned by Git after commit
+
+Affected files:
+
+- `docs/CHANGELOG.md`
+- `workflow/features/portable-v1/evidence/verification.md`
+
+Explanation:
+
+Record exact fuzz commands and retain hashed, command-traced clean-clone and
+external-consumer logs after the first evidence audit rejected unverifiable
+prose. This is bookkeeping over the unchanged hardened source.
+
+Verification:
+
+- direct SHA-256 comparison of retained logs
+- fresh evidence-only Judge pass required after this commit
+
+Risks / non-goals:
+
+- No implementation, API, wire, workflow state, or release claim changes.
+
+### 2026-09-03 13:25 CDT — Finalize revision-matched worker evidence
+
+Commit: `72a5c318cb58c4d2b6d787cc0c66eb753e51d31e`
 
 Affected files:
 
@@ -26,7 +50,6 @@ independent orchestrator admission remains deliberately separate.
 Verification:
 
 - revision-matched commands and hashes in feature evidence
-- fresh evidence-only worker Judge pass
 
 Risks / non-goals:
 

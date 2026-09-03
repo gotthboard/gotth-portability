@@ -55,15 +55,23 @@ Fresh five-second fuzz runs:
 - checkpoint parser: 180,671 executions;
 - malformed archive: 294,402 executions.
 
+Exact commands:
+
+```text
+go test -mod=readonly -run '^$' -fuzz '^FuzzArchiveRoundTrip$' -fuzztime=5s ./pkg/portability
+go test -mod=readonly -run '^$' -fuzz '^FuzzCheckpointParserNeverPanics$' -fuzztime=5s ./pkg/portability
+go test -mod=readonly -run '^$' -fuzz '^FuzzMalformedArchiveNeverCompletesSilently$' -fuzztime=5s ./pkg/portability
+```
+
 ## External consumer
 
-A separate module under `/tmp/gotth-portability-consumer.2WECWD` imports the
-public package through a local replacement and passes race, vet, and build. It
+A separate temporary module imported the public package from a no-local clone
+detached at the exact hardened source and passed race, vet, and build. It
 constructs exporter/importer, persists/parses a checkpoint, implements the
-staged sink interfaces, and observes explicit completion. The directory is
-disposable task-owned scratch and is removed at handoff. A separate no-local
-clone at `/tmp/gotth-portability-clean.neko3E`, detached at the exact hardened
-source, passes readonly race, vet, and build with a clean status.
+staged sink interfaces, and observes explicit completion. The no-local clone
+itself passed readonly race, vet, and build with a clean detached status. Both
+temporary directories are disposable; command-traced result logs are retained
+and hashed below.
 
 ## Performance evidence
 
@@ -94,6 +102,8 @@ consumer error text remains absent from the public error string.
 | `/tmp/gotth-portability-fuzz-archive-5a291d9.log` | `b167ef4352e3e31860c7ca7dd83d531ab333c9952378bc7b9526cf916e3efe66` |
 | `/tmp/gotth-portability-performance-5a291d9.log` | `0eb05713918d47aa1fdabe2792e55ca5bf4e08b30a19e338fa8553d606b1af4f` |
 | `/tmp/gotth-portability-bench-5a291d9.log` | `bcf3a1077d8a0f81c6dfe685653aad8cd21bf61e677f6c7a8c8f278d8f9dee93` |
+| `/tmp/gotth-portability-clean-clone-5a291d9.log` | `45917f5efaaa532268840445242710d831b9fe55d2196ba703f789fb49b61a81` |
+| `/tmp/gotth-portability-external-consumer-5a291d9.log` | `4d541d15bcd9ade61b10f18aa76d34e0cde57524088979b25d233e03f48f9b73` |
 
 ## Graph review
 
@@ -116,10 +126,13 @@ The first fresh worker Judge pass failed on weak checkpoint invariants, missing
 prior-checkpoint recovery, incomplete unknown-commit modeling, dishonest I/O
 classification, incomplete wire/boundary pins, and stale evidence. Those code
 and test findings are corrected. A fresh pass found no remaining code blocker;
-revision-matched evidence is now complete.
+its evidence audit then failed on missing fuzz commands and missing retained
+clean-clone/external-consumer logs. Those reproducibility gaps are corrected in
+the current bookkeeping commit.
 
 ## Remaining gate
 
-A fresh evidence-only Judge pass and cleanup remain. The orchestrator owns
-independent final review and admission. Workflow state intentionally remains
-`in_progress`.
+A fresh evidence-only Judge pass must verify this final bookkeeping commit; its
+verdict is handoff evidence and does not mutate canonical source. The
+orchestrator owns independent final review and admission. Workflow state
+intentionally remains `in_progress`.
