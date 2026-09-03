@@ -6,6 +6,39 @@ Released sections use Semantic Versioning; unreleased work remains under
 
 ## Unreleased
 
+### 2026-09-03 13:59 CDT — Specify retry and poisoning boundaries
+
+Implementation commit: `8d7836c09cf5e35c5088065c0a3906ae1ddb3e2e`.
+Evidence commit: this documentation-only commit. The heading uses the verified
+implementation commit author time.
+
+Affected files:
+
+- `pkg/portability` public comments and failure-path tests
+- `README.md`, implementation specification, and verification evidence
+
+Explanation:
+
+State the existing mechanism precisely: argument, validation, limit/offset,
+and entry-cancellation preflights perform no record/frame I/O and leave live
+objects reusable; failures after I/O begins poison the object. Add direct tests
+for every retryable preflight and for poisoning after partial progress. Correct
+general lower bounds for checkpoint marshaling and record operations to
+`Omega(1)`, retaining tight linear successful/valid-path bounds.
+
+Verification:
+
+- focused retry/poison boundary tests pass under race three consecutive times
+- full format/diff/vet/race/coverage/build passes at 93.6% statement coverage
+- fresh traces bind both gates to exact implementation `8d7836c`
+
+Risks / non-goals:
+
+- Runtime behavior and the V1 wire format are unchanged; this repairs the
+  public contract and its proof.
+- No downstream consumer schema or pin is fabricated. Workflow stays
+  `in_progress` and unreleased.
+
 ### 2026-09-03 13:19 CDT — Preserve Begin cancellation and bind raw evidence
 
 Implementation commit: `d22c2de207a3a6b046b7ed96aa72d7640ca616f0`.

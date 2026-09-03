@@ -12,6 +12,8 @@
   `95edd8269173a7d580d2ab0a9ecf3560c4c2b5ce`.
 - Final cancellation/provenance hardening commit:
   `d22c2de207a3a6b046b7ed96aa72d7640ca616f0`.
+- Retry-boundary and cost-contract correction commit:
+  `8d7836c09cf5e35c5088065c0a3906ae1ddb3e2e`.
 - Branch/worktree: `feature/v1-portability` at
   `/tmp/gotth-portability-worktrees/v1-portability`.
 - No push, PR, tag, release, deployment, live database, secret, or remote state
@@ -51,24 +53,28 @@ Passed locally:
 git diff --check -- .
 go vet -mod=readonly ./...
 go build -mod=readonly ./...
-go test -mod=readonly -race -coverprofile=/tmp/gotth-portability-coverage-d22c2de.out ./...
-go test -mod=readonly -race -count=50 ./...
+go test -mod=readonly -race -count=3 ./pkg/portability -run 'TestExporterWriteRecordPreflightIsRetryableAndProgressFailurePoisons|TestImporterNextPreflightIsRetryableAndFrameProgressPoisons'
+make verify
+go test -mod=readonly -race -coverprofile=/tmp/gotth-portability-coverage-8d7836c.out ./...
 ```
 
-Hardened source coverage is 92.9% under race. Boundary, negative, staged sink,
+Hardened source coverage is 93.6% under race. Boundary, negative, staged sink,
 every-byte truncation, literal empty/non-empty archive and checkpoint goldens,
 resume, external-package, and bounded-write tests pass. New tests bracket every
 caller-owned cancellation seam, enforce a finite no-progress bound and strict
 Writer contract, verify lazy/reused payload buffers, and inject every public
 sentinel through every callback class to prove causes cannot spoof
-`errors.Is`. Begin error paths cover nil/non-nil stages, cancellation after the
-callback, and Abort success/failure. Simultaneous begin failure and cancellation
-retain `ErrSink`, `ErrIO`, and both raw causes. Both nil/error returns after a
-cleanup deadline have direct tests. Exact-valid fuzz seeds require the commit
-entry even for empty payload. Residual lines are defensive variants within
-already-covered classifications.
+`errors.Is`. Retry-boundary tests prove every documented exporter/importer
+preflight performs no record/frame I/O and leaves the live object reusable;
+partial record/frame progress poisons it. Begin error paths cover nil/non-nil
+stages, cancellation after the callback, and Abort success/failure.
+Simultaneous begin failure and cancellation retain `ErrSink`, `ErrIO`, and both
+raw causes. Both nil/error returns after a cleanup deadline have direct tests.
+Exact-valid fuzz seeds require the commit entry even for empty payload.
+Residual lines are defensive variants within already-covered classifications.
 
-Fresh five-second fuzz runs:
+The runtime implementation is unchanged from `d22c2de`; its retained fresh
+five-second fuzz runs were:
 
 - archive roundtrip: 19,653 executions;
 - checkpoint parser: 7,696 executions;
@@ -92,7 +98,7 @@ Invalid mutation classes assert no forbidden commit, completion, or Manifest.
 ## External consumer
 
 A separate temporary module imported the public package from a no-local clone
-detached at the exact hardened source and passed race, vet, and build. It
+detached at runtime baseline `d22c2de` and passed race, vet, and build. It
 constructs exporter/importer, persists/parses a checkpoint, implements the
 staged sink interfaces, and observes explicit completion. The no-local clone
 itself passed readonly race, vet, and build with a clean detached status. Both
@@ -108,7 +114,8 @@ hashed below, so helper-backed command records remain reproducible.
 
 ## Performance evidence
 
-The end-to-end matrix and limitations are in `docs/performance.md`. Zero-record
+The unchanged-runtime `d22c2de` end-to-end matrix and limitations are in
+`docs/performance.md`. Zero-record
 export uses 304 B/op and three allocations; one empty record uses 440 B/op and
 nine allocations. Zero-record import uses 544 B/op and 21 allocations; one
 empty record uses 776 B/op and 35 allocations. Non-empty export/import remains
@@ -132,7 +139,21 @@ provides explicit access to the unchanged raw cause, which may be sensitive and
 must be consumer-redacted before logging or display; public `Error()` text
 remains redaction-safe.
 
-| Revision-matched retained artifact | SHA-256 |
+| Current-source retained artifact | SHA-256 |
+| --- | --- |
+| `/tmp/gotth-portability-focused-8d7836c.log` | `c0b655e94b254113c9319518a8590330ad6e648b311be415c32b02eb127e4fec` |
+| `/tmp/gotth-portability-focused-8d7836c.raw.log` | `7b15f3128b35e74e756d388a72966755548df3baa5cfdfff7f0a88832a9b55aa` |
+| `/tmp/gotth-portability-verify-8d7836c.log` | `333a98efdf948dbb42472c5a2488c524871171a238f35d9c66ef5636d2fd1cf0` |
+| `/tmp/gotth-portability-verify-8d7836c.raw.log` | `00f07a4e6e0deed70a4f75444b225341e4e798262a485303e3ace64502877e3d` |
+| `/tmp/gotth-portability-coverage-8d7836c.log` | `4a682bfb630ec4ae89cc2dca85be1270d13d0993deecbd42895752f67e5a5566` |
+| `/tmp/gotth-portability-coverage-8d7836c.raw.log` | `6c42efe74db4da66c62415f64b472c96a069bf5bf90eb230a857119154d8ad46` |
+| `/tmp/gotth-portability-coverage-8d7836c.out` | `f73459c37e7b6fd76beaec9b299bfb47427d808f622dd42479fdb22f029f2085` |
+
+The following artifacts bind runtime baseline `d22c2de`. They remain relevant
+because `8d7836c` changes comments and tests only; they are not represented as
+current-source executions.
+
+| Unchanged-runtime baseline artifact | SHA-256 |
 | --- | --- |
 | `/tmp/gotth-portability-verify-d22c2de.log` | `3d424f8690a0d1a835cf5de1620e58904c42ae8a94642d8ab2051b56b47b7507` |
 | `/tmp/gotth-portability-verify-d22c2de.raw.log` | `5d4014153793a187de23270b75de8a100fbb4170d4951d5b717abee699a89af7` |
@@ -206,6 +227,12 @@ false unconditional ParseCheckpoint lower bound, unbound raw admission logs,
 and missing changelog times. Implementation `d22c2de` corrects the callback and
 complexity findings. The provenance-bound traces and this documentation-only
 evidence commit correct the evidence and chronology findings.
+Independent review of evidence head `d2bd5ea` then rejected an overbroad
+poisoning claim and invalid general lower bounds. Exact source `8d7836c`
+documents the actual retry/progress boundary, corrects the bounds, and adds
+direct state-transition tests. Fresh focused, full, and coverage traces bind
+that correction; unchanged-runtime fuzz, performance, external-consumer, and
+graph results remain explicitly labeled as the `d22c2de` baseline.
 
 ## Remaining gate
 
