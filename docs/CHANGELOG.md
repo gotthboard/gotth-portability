@@ -6,9 +6,36 @@ Released sections use Semantic Versioning; unreleased work remains under
 
 ## Unreleased
 
-### 2026-09-03 12:40 CDT — Record worker verification evidence
+### 2026-09-03 13:25 CDT — Finalize revision-matched worker evidence
 
 Commit: current commit; hash assigned by Git after commit
+
+Affected files:
+
+- `docs/performance.md`, `docs/verification.md`, `docs/CHANGELOG.md`
+- `workflow/COVERAGE.md`
+- `workflow/features/portable-v1/evidence/verification.md`
+
+Explanation:
+
+Replace superseded pre-correction measurements with exact hardened-source
+coverage, race, fuzz, performance, clean-clone, external-consumer, and Graphify
+evidence and cryptographic hashes. Preserve `in_progress` workflow state because
+independent orchestrator admission remains deliberately separate.
+
+Verification:
+
+- revision-matched commands and hashes in feature evidence
+- fresh evidence-only worker Judge pass
+
+Risks / non-goals:
+
+- This is evidence-only and changes no implementation or compatibility surface.
+- No push, PR, tag, release, or independent admission is claimed.
+
+### 2026-09-03 12:40 CDT — Record worker verification evidence
+
+Commit: `5a291d9752839333ba033005b21c80686836b9e3`
 
 Affected files:
 

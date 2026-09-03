@@ -3,8 +3,8 @@
 Current worker verification:
 
 - Go 1.26.6 format, diff check, vet, build, race, and coverage pass locally.
-- The post-correction cold-review run reports 94.3% race-instrumented statement
-  coverage; final revision-matched evidence is pending. Residual statements are
+- The hardened source commit reports 94.3% race-instrumented statement
+  coverage. Residual statements are
   defensive malformed-checkpoint/header, impossible count-overflow, and rare
   delegated-I/O branches; every public operation, sentinel family, record state
   boundary, checksum/finalization path, and resume path has direct tests.
@@ -16,19 +16,19 @@ Current worker verification:
   checkpoint golden tests.
 - Injected reader and writer failures prove that local I/O failure is distinct
   from malformed input and premature EOF while retaining redacted diagnostics.
-- Fresh fuzz admissions passed 251,419 valid roundtrip inputs, 304,670 arbitrary
-  checkpoint inputs, and 323,051 arbitrary archive inputs.
+- Fresh fuzz admissions passed 242,866 valid roundtrip inputs, 180,671 arbitrary
+  checkpoint inputs, and 294,402 arbitrary archive inputs.
 - Fifty consecutive race-instrumented suite runs pass.
 - A separate external module imports the public package and passes race, vet,
   and build gates using a local replacement for this unreleased source.
 - Performance percentiles, allocation evidence, and limitations are in
   `docs/performance.md`.
-- Graphify 0.9.32 extracted 175 nodes and 401 edges from the implementation
+- Graphify 0.9.32 extracted 206 nodes and 490 edges from the hardened source
   commit. It confirms the rolling chain reaches export and import and the
   checkpoint reaches both resume constructors; those edges were verified in
   source and tests.
 
 Worker cold review found and drove concrete checkpoint, recovery, error, wire,
-and evidence corrections. Final revision-matched reruns remain pending.
-Independent final admission remains orchestrator-owned; this status creates no
-release claim.
+and evidence corrections. Revision-matched gates, performance, clean-clone,
+external-consumer, graph, and fuzz evidence pass. Independent final admission
+remains orchestrator-owned; this status creates no release claim.

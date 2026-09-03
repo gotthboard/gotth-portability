@@ -13,7 +13,6 @@
 | PORT-009 | PRD/non-goals | API and docs | external consumer and boundary audit | covered |
 | PORT-010 | distribution | `LICENSE` | license inventory | covered |
 
-The post-correction cold-review run reports 94.3% race-instrumented statement
-coverage; final revision-matched evidence is pending. The exact residual
+The hardened source reports 94.3% race-instrumented statement coverage. The exact residual
 classes and why they do not leave claimed behavior untested are recorded in
 `docs/verification.md`; statement percentage is not the completeness oracle.

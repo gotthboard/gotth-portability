@@ -5,6 +5,7 @@
 - Pinned placeholder base: `64ac2f3f52f05644c1e8584b3a9044d5dda1cdd1`.
 - Contract commit: `d827d1b76c7f3f6c0a3ddc965a15bfadb0fddbed`.
 - Initial implementation commit: `a4b39e8d20caa140d9d5dd10fdd0e5a41ad0eff4`.
+- Hardened source commit: `5a291d9752839333ba033005b21c80686836b9e3`.
 - Branch/worktree: `feature/v1-portability` at
   `/tmp/gotth-portability-worktrees/v1-portability`.
 - No push, PR, tag, release, deployment, live database, secret, or remote state
@@ -38,21 +39,21 @@ Passed locally:
 git diff --check -- .
 go vet -mod=readonly ./...
 go build -mod=readonly ./...
-go test -mod=readonly -race -coverprofile=/tmp/gotth-portability-coverage-final.out ./...
+go test -mod=readonly -race -coverprofile=/tmp/gotth-portability-coverage-5a291d9.out ./...
 go test -mod=readonly -race -count=50 ./...
 ```
 
-Post-correction cold-review coverage: 94.3% under race. Final revision-matched
-evidence is pending. Boundary, negative, staged sink, every-byte
-truncation, V1 golden, resume, external-package, and bounded-write tests pass.
-No claimed public behavior or failure class lacks a direct test. Residual lines
-are defensive variants within already-covered classifications.
+Hardened source coverage is 94.3% under race. Boundary, negative, staged sink,
+every-byte truncation, literal empty/non-empty archive and checkpoint goldens,
+resume, external-package, and bounded-write tests pass. No claimed public
+behavior or failure class lacks a direct test. Residual lines are defensive
+variants within already-covered classifications.
 
 Fresh five-second fuzz runs:
 
-- archive roundtrip: 251,419 executions;
-- checkpoint parser: 304,670 executions;
-- malformed archive: 323,051 executions.
+- archive roundtrip: 242,866 executions;
+- checkpoint parser: 180,671 executions;
+- malformed archive: 294,402 executions.
 
 ## External consumer
 
@@ -60,7 +61,9 @@ A separate module under `/tmp/gotth-portability-consumer.2WECWD` imports the
 public package through a local replacement and passes race, vet, and build. It
 constructs exporter/importer, persists/parses a checkpoint, implements the
 staged sink interfaces, and observes explicit completion. The directory is
-disposable task-owned scratch and is removed at handoff.
+disposable task-owned scratch and is removed at handoff. A separate no-local
+clone at `/tmp/gotth-portability-clean.neko3E`, detached at the exact hardened
+source, passes readonly race, vet, and build with a clean status.
 
 ## Performance evidence
 
@@ -81,29 +84,31 @@ Worker review also split `ErrIO` from `ErrMalformed` and `ErrTruncated`.
 Injected source/destination failures verify the distinction and that underlying
 consumer error text remains absent from the public error string.
 
-The following pre-correction artifacts are retained as audit history but are
-superseded and not final evidence:
-
-| Superseded external artifact | SHA-256 |
+| Revision-matched external artifact | SHA-256 |
 | --- | --- |
-| `/tmp/gotth-portability-performance-final.log` | `1ed2ee04cc1ebfd8394463dbd0a27b3026d77b0e942c492309fdf2e20ca331b8` |
-| `/tmp/gotth-portability-bench-final.log` | `0a32c024a3b5e6b6e541e065181f7a8d0bd5b77f7c6aa80988ad9df9ed4f10ee` |
-| `/tmp/gotth-portability-race50-final.log` | `8e38ec201ca587f9939a1f915df632b078806383ad7f1f26a66c1f49ffa15379` |
-| `/tmp/gotth-portability-coverage-final.out` | `7f2663a3e1b3e923e47b2875f83ad588e9d2d7a78ddc0cadd3847a9be3ae7fa7` |
+| `/tmp/gotth-portability-verify-5a291d9.log` | `85d7fa21699bb6420a968fcd7c53ac1e25b6b34fd7164e9e9bf8fb3752939857` |
+| `/tmp/gotth-portability-coverage-5a291d9.out` | `440ecc2a936cb48620d27ba478e067fdad57fea2bc39447e1b3c81d35a5ff2e0` |
+| `/tmp/gotth-portability-race50-5a291d9.log` | `de02a62dfffa627bf374b992453541536c2e067db60c7eedbfce9caa781d5bfa` |
+| `/tmp/gotth-portability-fuzz-roundtrip-5a291d9.log` | `7cd633a136e3acfeb350f948d9b76509cabe79428121bbb61383d2fab77f22ee` |
+| `/tmp/gotth-portability-fuzz-checkpoint-5a291d9.log` | `ab4e27ea2147126a5f1920d3fa761217c59d5801fd1880a2ea46248b83b19f16` |
+| `/tmp/gotth-portability-fuzz-archive-5a291d9.log` | `b167ef4352e3e31860c7ca7dd83d531ab333c9952378bc7b9526cf916e3efe66` |
+| `/tmp/gotth-portability-performance-5a291d9.log` | `0eb05713918d47aa1fdabe2792e55ca5bf4e08b30a19e338fa8553d606b1af4f` |
+| `/tmp/gotth-portability-bench-5a291d9.log` | `bcf3a1077d8a0f81c6dfe685653aad8cd21bf61e677f6c7a8c8f278d8f9dee93` |
 
 ## Graph review
 
-Graphify extracted implementation commit
-`a4b39e8d20caa140d9d5dd10fdd0e5a41ad0eff4` in code-only mode: 175 nodes,
-401 edges, and 12 communities. It skipped 16 non-code documents and seven
+Graphify extracted hardened source commit
+`5a291d9752839333ba033005b21c80686836b9e3` in code-only mode: 206 nodes,
+490 edges, and 16 communities. It skipped 17 non-code documents and seven
 unclassified non-code files. The graph is at
-`~/.cache/openclaw-code-index/gotth-portability/a4b39e8d20caa140d9d5dd10fdd0e5a41ad0eff4/graphify/graphify-out/graph.json`
+`~/.cache/openclaw-code-index/gotth-portability/5a291d9752839333ba033005b21c80686836b9e3/graphify/graphify-out/graph.json`
 with SHA-256
-`c54becbead65354d8124ee25217e8f4560d51bff1dc2ef294e4fd77935bd237a`.
+`6ec6c413e774cc8419ec132a13799b635c3fb89205f84f7e4c85125c08747c25`.
 Graph queries show `nextChain` reaches both export and import, while
 `Checkpoint` reaches both resume constructors and the codec. Source and tests
-confirm those consequential edges. Graph output is iteration evidence, not a
-correctness or admission oracle.
+confirm those consequential edges. The graph contains no self-loop or exact
+duplicate edge. Graph output is iteration evidence, not a correctness or
+admission oracle.
 
 ## Cold review
 
@@ -111,10 +116,10 @@ The first fresh worker Judge pass failed on weak checkpoint invariants, missing
 prior-checkpoint recovery, incomplete unknown-commit modeling, dishonest I/O
 classification, incomplete wire/boundary pins, and stale evidence. Those code
 and test findings are corrected. A fresh pass found no remaining code blocker;
-final revision-matched evidence remains the only open worker gate.
+revision-matched evidence is now complete.
 
 ## Remaining gate
 
-Final revision-matched reruns, clean-clone verification, a fresh evidence-only
-Judge pass, and cleanup remain. The orchestrator owns independent final review
-and admission. Workflow state intentionally remains `in_progress`.
+A fresh evidence-only Judge pass and cleanup remain. The orchestrator owns
+independent final review and admission. Workflow state intentionally remains
+`in_progress`.

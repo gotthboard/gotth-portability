@@ -37,11 +37,11 @@ correctness evidence only and are not mixed into the timing table.
 
 | Workload | Samples | p50 | p95 | p99 | Throughput |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| empty archive | 200 | 25.442 us | 106.732 us | 151.115 us | 28,444.18 archives/s |
-| 1 x 1 KiB | 200 | 252.210 us | 609.331 us | 1.723953 ms | 3,169.92 archives/s |
-| 16 x 64 KiB | 80 | 68.748623 ms | 102.088278 ms | 141.738960 ms | 13.49 archives/s |
-| 4 x 1 MiB | 20 | 245.800180 ms | 367.929337 ms | 420.502129 ms | 3.78 archives/s |
-| 1,000 empty records | 10 | 100.553123 ms | 127.474194 ms | 127.474194 ms | 9.59 archives/s |
+| empty archive | 200 | 2.095 us | 6.446 us | 16.564 us | 369,208.73 archives/s |
+| 1 x 1 KiB | 200 | 17.826 us | 55.780 us | 145.519 us | 36,274.15 archives/s |
+| 16 x 64 KiB | 80 | 6.257875 ms | 6.835371 ms | 10.094234 ms | 158.62 archives/s |
+| 4 x 1 MiB | 20 | 22.887666 ms | 25.904109 ms | 38.462257 ms | 41.79 archives/s |
+| 1,000 empty records | 10 | 11.824175 ms | 18.878047 ms | 18.878047 ms | 78.37 archives/s |
 
 The 1,000-empty-record workload isolates per-frame overhead and is the
 pathological metadata regime. The large workloads show the expected linear
@@ -53,10 +53,12 @@ objective.
 Export reported 33,176-33,178 B/op and 10 allocs/op at 0 bytes, 1 KiB, 1 MiB,
 and 16 MiB. That constant allocation is the fixed 32 KiB payload buffer plus
 small hash/frame state; it does not grow with archive size. The five observed
-samples ranged from roughly 4.0-5.1 ms at 1 MiB and 53-76 ms at 16 MiB,
-consistent with linear payload work.
+samples ranged from roughly 7.46-8.17 ms at 1 MiB and 44.6-141.1 ms at
+16 MiB. The high 16 MiB outlier reinforces that this shared host is unsuitable
+for an SLO; allocation counts and asymptotic byte work are the stable evidence.
 
-The timing spread, especially the first empty sample, reflects an uncontrolled
-shared host. No CPU profile, scheduler isolation, or hardware counter evidence
-was collected because there is no optimization proposal. Re-run against real
-consumer record distributions before setting an SLO or changing the mechanism.
+The timing spread and the materially different superseded pre-correction run
+reflect an uncontrolled shared host. No CPU profile, scheduler isolation, or
+hardware counter evidence was collected because there is no optimization
+proposal. Re-run against real consumer record distributions before setting an
+SLO or changing the mechanism.
