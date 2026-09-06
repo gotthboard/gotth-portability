@@ -22,6 +22,8 @@
   `55ba1451cf80661f97c62cc3d41e38e2a0cc77e1`.
 - Record-cost and pre-Abort deadline correction:
   `9a0392433796c26f12b1a83e04becbf9799a3c41`.
+- Simultaneous commit-outcome correction:
+  `4596963503d856438ea415dcacce3619f8085436`.
 - Branch/worktree: `feature/v1-portability` at
   `/tmp/gotth-portability-worktrees/v1-portability`.
 - No push, PR, tag, release, deployment, live database, secret, or remote state
@@ -55,7 +57,37 @@ potentially sensitive; only `Error()` is redaction-safe.
 
 ## Correctness gates
 
-Passed locally:
+Fresh completion audit of exact implementation
+`4596963503d856438ea415dcacce3619f8085436` used an isolated clean detached
+clone at `/tmp/gotth-portability-audit-4596963-T5zT4o/repo` on `development`.
+Repository `make verify`, focused race, and a separate race-instrumented
+coverage run passed. Total statement coverage is 94.8%; every block in the
+changed commit-result decision executed. Three sequential three-second fuzz
+targets passed: archive roundtrip (1,492,552 executions), checkpoint parser
+(2,178,216), and bounded arbitrary archive (1,866,784). The mutation-oracle
+fuzz target, fresh external-consumer proof, and fresh performance/benchmark
+gates were not rerun before expedited worker handoff. Existing results for
+those gates remain historical evidence and are not represented as current-
+source execution.
+
+| Exact source `4596963` retained artifact | SHA-256 |
+| --- | --- |
+| `/tmp/gotth-portability-verify-4596963.raw.log` | `19ffdddebabb82e7346e29e992307ab9247597cf831c31cc038e58188bcf94ee` |
+| `/tmp/gotth-portability-focused-race-4596963.raw.log` | `6b8e8c43225fbe614b5ca8e7ea21fef17c1666a0ffdf86cd0680cbfd726093bc` |
+| `/tmp/gotth-portability-coverage-4596963.raw.log` | `a668cb7bab08783f7ce4078fea6871c22362ca770e36637f9b87cf488e41f602` |
+| `/tmp/gotth-portability-coverage-4596963.out` | `deb7af8fbfe4e1fcc8ffd561eb1700148e7b6a5c205dcaaf8a986aa7331d5745` |
+| `/tmp/gotth-portability-coverage-functions-4596963.raw.log` | `77110cc144e87b3f052733949c51be0d5f32a74e057004184a9b697805672282` |
+| `/tmp/gotth-portability-fuzz-roundtrip-4596963.raw.log` | `d0d4cf60ec50e189d9e3f9b4307622c02e3a3c245e11e7cc6b5f9b1a4725d1e6` |
+| `/tmp/gotth-portability-fuzz-checkpoint-4596963.raw.log` | `69ffa94fdbeb426c6b3cee4ce2bd8aea183f453e6d93679a1887e6ab22f6b1e2` |
+| `/tmp/gotth-portability-fuzz-arbitrary-4596963.raw.log` | `a0c099f70000f7f9d056ad4a108ba5eb9ea5a2168eee34327bd1f36c053f8248` |
+| `/tmp/gotth-portability-4596963.bundle` | `976cabc7f806d2c3f8a0b298deb62f20b0c102fe2c5dc8030f42c538e68b5ceb` |
+
+The corrected commit path now preserves a consumer `Commit` failure when the
+same callback cancels its context: `ErrSink` remains primary, `ErrIO` is
+additional, both raw causes remain explicit and redacted from `Error()`, Abort
+is not called, and the prior checkpoint is retained.
+
+Previously passed for exact source `9a03924`:
 
 ```text
 git diff --check -- .

@@ -8,6 +8,43 @@ uses the named commit's Git author time, rendered to the minute in CDT.
 
 ## Unreleased
 
+### 2026-09-05 22:07 CDT — Preserve simultaneous commit outcomes
+
+Implementation commit: `4596963503d856438ea415dcacce3619f8085436`.
+Evidence commit: this documentation-only commit. The heading uses the verified
+implementation commit author time.
+
+Affected files:
+
+- `README.md`
+- `docs/CHANGELOG.md`
+- `docs/architecture.md`
+- `docs/implementation-spec.md`
+- `docs/verification.md`
+- `pkg/portability/hardening_test.go`
+- `pkg/portability/import.go`
+- `workflow/COVERAGE.md`
+- `workflow/features/portable-v1/evidence/verification.md`
+
+Explanation:
+
+Retain a `RecordSink.Commit` error when the same callback cancels its context.
+The unknown outcome now reports primary `ErrSink` and additional `ErrIO`, keeps
+both raw causes behind `Causer`, does not call `Abort`, and does not advance the
+checkpoint.
+
+Verification:
+
+- clean detached `development` clone passed repository `make verify`
+- focused race and race-instrumented coverage passed; changed blocks are covered
+- three sequential three-second fuzz targets passed
+
+Risks / non-goals:
+
+- The mutation-oracle fuzz target, fresh external-consumer proof, and fresh
+  performance/benchmark gates were not rerun before expedited worker handoff.
+- Workflow stays `in_progress`; this is not final admission.
+
 ### 2026-09-03 15:31 CDT — Complete record-cost and Abort bracketing contracts
 
 Implementation commit: `9a0392433796c26f12b1a83e04becbf9799a3c41`.

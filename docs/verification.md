@@ -2,9 +2,14 @@
 
 Current worker verification:
 
-- Go 1.26.6 format, diff check, vet, build, race, and coverage pass locally.
-- Hardened source `9a0392433796c26f12b1a83e04becbf9799a3c41` reports
-  94.7% race-instrumented statement coverage. `ResumeImporter` is 100%
+- Exact implementation `4596963503d856438ea415dcacce3619f8085436`
+  passed format, diff check, vet, build, race, and coverage in a clean detached
+  clone on `development`; these CPU-heavy gates were not run in the agenthost
+  gateway cgroup.
+- Current source reports 94.8% race-instrumented statement coverage. The new
+  simultaneous commit-failure/cancellation branch is directly covered along
+  with the adjacent sink-only, cancellation-only, and success branches.
+  `ResumeImporter` remains 100%
   statement-covered with direct argument, limit/checkpoint-order,
   pre/post-compatibility cancellation, incompatible-cause redaction, no-reader-
   I/O, and exact-restoration tests. Residual statements are the named
@@ -67,14 +72,24 @@ Current worker verification:
   begin/abort and fuzz-oracle edges were verified directly in source when
   ambiguous graph names existed.
 
+The fresh completion audit found and corrected loss of a simultaneous
+`RecordSink.Commit` error when the callback also canceled its context. The
+result retains `ErrSink`, `ErrIO`, and both explicit causes without aborting or
+advancing the checkpoint. Three exact-source three-second fuzz probes passed:
+archive roundtrip (1,492,552 executions), checkpoint parser (2,178,216), and
+bounded arbitrary archive (1,866,784). The mutation-oracle fuzz target, fresh
+external-consumer proof, and fresh performance/benchmark gates were not rerun
+before expedited handoff; the prior evidence remains historical rather than a
+claim about `4596963`.
+
 Worker and independent cold reviews drove checkpoint, recovery, cancellation,
 callback-identity, I/O-contract, retry/poisoning contract, cost-bound, wire,
 allocation, fuzz-oracle, and evidence corrections. Performance,
 external-consumer, and graph evidence remain the `d22c2de` runtime baseline.
-Fresh verify, 94.7% race coverage, focused race x3, four sequential three-second
-fuzz probes, exact changelog provenance, and clean-clone evidence bind source
-`9a03924`. Its only executable change suppresses Abort when the fresh cleanup
-context is already expired; record wire/API behavior is unchanged. A real
+Prior fresh verify, 94.7% race coverage, focused race x3, four sequential
+three-second fuzz probes, exact changelog provenance, and clean-clone evidence
+bind source `9a03924`. Its only executable change suppresses Abort when the
+fresh cleanup context is already expired. A real
 downstream consumer schema/pin does not yet exist; workflow therefore remains
 `in_progress` and unreleased. Independent final admission remains
 orchestrator-owned.
