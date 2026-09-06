@@ -83,5 +83,7 @@ sink failure, incomplete state, finalized state, and clean completion. Wrapped
 errors never include payload or callback text. `errors.Is` traverses only the
 library classification; callers may explicitly retrieve the raw underlying
 error through `Causer.Cause` without letting callback values spoof library
-sentinels. Raw causes may contain sensitive application data and must be
-consumer-redacted before logging or display.
+sentinels. One `errors.As` to `Causer` on a combined outcome returns a cause
+whose `errors.Is` traversal includes every non-nil raw cause. Raw causes may
+contain sensitive application data and must be consumer-redacted before
+logging or display.

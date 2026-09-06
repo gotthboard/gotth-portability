@@ -23,6 +23,11 @@ type classifiedError struct {
 	cause error
 }
 
+type combinedError struct {
+	outcome error
+	cause   error
+}
+
 // Error intentionally omits the underlying cause text because consumer I/O
 // errors can contain payload fragments or storage identifiers.
 // Complexity: time O(1), Omega(1), tight Theta(1); auxiliary space O(1),
@@ -46,9 +51,49 @@ func (e *classifiedError) Unwrap() error { return e.class }
 // Complexity: time and auxiliary space O(1), Omega(1), tight Theta(1).
 func (e *classifiedError) Cause() error { return e.cause }
 
+// Error returns only the joined redacted outcome text. Raw causes remain
+// available solely through Cause.
+// Complexity: delegated time and auxiliary space equal the joined outcomes.
+func (e *combinedError) Error() string { return e.outcome.Error() }
+
+// Unwrap exposes every redacted outcome for standard errors.Is traversal.
+// Complexity: time and auxiliary space O(1), Omega(1), tight Theta(1).
+func (e *combinedError) Unwrap() error { return e.outcome }
+
+// Cause returns all non-nil raw causes as one standard multi-error.
+// Complexity: time and auxiliary space O(1), Omega(1), tight Theta(1).
+func (e *combinedError) Cause() error { return e.cause }
+
 // wrap creates a classified error whose Error string is redaction-safe.
 // Complexity: time O(1), Omega(1), tight Theta(1); auxiliary space O(1),
 // Omega(1), tight Theta(1), with one error allocation.
 func wrap(class error, op string, cause error) error {
 	return &classifiedError{class: class, op: op, cause: cause}
+}
+
+// combine preserves two redacted outcomes and makes one Causer expose all of
+// their non-nil raw causes. A nested combined cause remains traversable through
+// the standard multi-error returned by errors.Join.
+// Complexity: time and auxiliary space O(1), Omega(1), tight Theta(1), plus
+// storage allocated by two errors.Join calls and one combined error.
+func combine(primary, additional error) error {
+	if primary == nil {
+		return additional
+	}
+	if additional == nil {
+		return primary
+	}
+	return &combinedError{
+		outcome: errors.Join(primary, additional),
+		cause:   errors.Join(rawCause(primary), rawCause(additional)),
+	}
+}
+
+// rawCause extracts only an outcome's explicit cause, never its unwrap tree.
+// Complexity: time and auxiliary space O(1), Omega(1), tight Theta(1).
+func rawCause(err error) error {
+	if causer, ok := err.(Causer); ok {
+		return causer.Cause()
+	}
+	return nil
 }

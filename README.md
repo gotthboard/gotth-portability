@@ -37,8 +37,10 @@ application.
 - Stable sentinels classify failures. Library-generated error strings never
   include payload bytes or consumer error text, callback causes cannot spoof a
   sentinel through `errors.Is`, and the library emits no logs. Callers that
-  need the raw underlying cause can explicitly use `Causer`. That cause is
-  potentially sensitive and must be consumer-redacted before logging or display.
+  need the raw underlying cause can explicitly use `Causer`. For combined
+  outcomes, one `errors.As` to `Causer` yields a cause whose `errors.Is`
+  traversal retains every non-nil raw cause. Those causes are potentially
+  sensitive and must be consumer-redacted before logging or display.
 
 ## Deliberate limits
 

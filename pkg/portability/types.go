@@ -74,7 +74,9 @@ type Compatibility func(context.Context, Header) error
 // storage identifiers, secrets, or other sensitive consumer data. Callers must
 // apply their own redaction before logging or displaying it. This prevents raw
 // callback values from spoofing a library sentinel while preserving explicit,
-// opt-in diagnostics for trusted code.
+// opt-in diagnostics for trusted code. For a combined library error, one
+// errors.As call to Causer returns a Cause whose errors.Is traversal retains
+// every non-nil raw cause.
 type Causer interface {
 	Cause() error
 }

@@ -48,7 +48,7 @@ func NewImporter(ctx context.Context, r io.Reader, limits Limits, compatibility 
 	if compatibilityErr != nil {
 		primary := wrap(ErrIncompatible, "consumer schema", compatibilityErr)
 		if contextErr := ctx.Err(); contextErr != nil {
-			return nil, errors.Join(primary, wrap(ErrIO, "consumer schema", contextErr))
+			return nil, combine(primary, wrap(ErrIO, "consumer schema", contextErr))
 		}
 		return nil, primary
 	}
@@ -87,7 +87,7 @@ func ResumeImporter(ctx context.Context, r io.Reader, checkpoint Checkpoint, lim
 	if compatibilityErr != nil {
 		primary := wrap(ErrIncompatible, "consumer schema", compatibilityErr)
 		if contextErr := ctx.Err(); contextErr != nil {
-			return nil, errors.Join(primary, wrap(ErrIO, "consumer schema", contextErr))
+			return nil, combine(primary, wrap(ErrIO, "consumer schema", contextErr))
 		}
 		return nil, primary
 	}
@@ -219,7 +219,7 @@ func (i *Importer) readRecord(ctx context.Context, sink Sink) (Checkpoint, error
 	if beginErr != nil {
 		var primary error = wrap(ErrSink, "begin record", beginErr)
 		if beginContextErr != nil {
-			primary = errors.Join(primary, wrap(ErrIO, "begin record", beginContextErr))
+			primary = combine(primary, wrap(ErrIO, "begin record", beginContextErr))
 		}
 		if stage != nil {
 			return Checkpoint{}, i.abort(ctx, stage, primary)
@@ -229,7 +229,7 @@ func (i *Importer) readRecord(ctx context.Context, sink Sink) (Checkpoint, error
 	if stage == nil {
 		primary := wrap(ErrSink, "begin record", nil)
 		if beginContextErr != nil {
-			return Checkpoint{}, errors.Join(primary, wrap(ErrIO, "begin record", beginContextErr))
+			return Checkpoint{}, combine(primary, wrap(ErrIO, "begin record", beginContextErr))
 		}
 		return Checkpoint{}, primary
 	}
@@ -257,7 +257,7 @@ func (i *Importer) readRecord(ctx context.Context, sink Sink) (Checkpoint, error
 		primary := wrap(ErrSink, "commit record; outcome may be unknown", commitErr)
 		if commitContextErr != nil {
 			canceled := wrap(ErrIO, "commit record; outcome may be unknown", commitContextErr)
-			return Checkpoint{}, errors.Join(primary, canceled)
+			return Checkpoint{}, combine(primary, canceled)
 		}
 		return Checkpoint{}, primary
 	}
@@ -311,7 +311,7 @@ func (i *Importer) copyPayload(ctx context.Context, dst io.Writer, size uint64) 
 		if writeErr != nil {
 			primary := wrap(ErrSink, "write staged record", writeErr)
 			if writeContextErr != nil {
-				return [32]byte{}, errors.Join(primary, wrap(ErrIO, "write staged record", writeContextErr))
+				return [32]byte{}, combine(primary, wrap(ErrIO, "write staged record", writeContextErr))
 			}
 			return [32]byte{}, primary
 		}
@@ -346,17 +346,17 @@ func abortWithTimeout(ctx context.Context, stage RecordSink, primary error, time
 	cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), timeout)
 	defer cancel()
 	if cleanupErr := cleanupCtx.Err(); cleanupErr != nil {
-		return errors.Join(primary, wrap(ErrSink, "abort record deadline", cleanupErr))
+		return combine(primary, wrap(ErrSink, "abort record deadline", cleanupErr))
 	}
 	abortErr := stage.Abort(cleanupCtx)
 	if cleanupErr := cleanupCtx.Err(); cleanupErr != nil {
 		if abortErr != nil {
-			return errors.Join(primary, wrap(ErrSink, "abort record deadline", errors.Join(cleanupErr, abortErr)))
+			return combine(primary, wrap(ErrSink, "abort record deadline", errors.Join(cleanupErr, abortErr)))
 		}
-		return errors.Join(primary, wrap(ErrSink, "abort record deadline", cleanupErr))
+		return combine(primary, wrap(ErrSink, "abort record deadline", cleanupErr))
 	}
 	if abortErr != nil {
-		return errors.Join(primary, wrap(ErrSink, "abort record", abortErr))
+		return combine(primary, wrap(ErrSink, "abort record", abortErr))
 	}
 	return primary
 }

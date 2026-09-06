@@ -777,23 +777,8 @@ func assertClassSet(t *testing.T, err error, expected ...error) {
 }
 
 func containsExplicitCause(err, target error) bool {
-	if err == nil {
-		return false
-	}
-	if causer, ok := err.(Causer); ok && errors.Is(causer.Cause(), target) {
-		return true
-	}
-	switch current := err.(type) {
-	case interface{ Unwrap() []error }:
-		for _, child := range current.Unwrap() {
-			if containsExplicitCause(child, target) {
-				return true
-			}
-		}
-	case interface{ Unwrap() error }:
-		return containsExplicitCause(current.Unwrap(), target)
-	}
-	return false
+	var causer Causer
+	return errors.As(err, &causer) && errors.Is(causer.Cause(), target)
 }
 
 func TestCallbackCausesCannotSpoofLibrarySentinels(t *testing.T) {

@@ -25,8 +25,9 @@
   direct return is nil.
 - When a compatibility, staged-write, begin, or commit callback both produces
   a semantic failure and leaves the context canceled, the semantic class stays
-  primary and cancellation adds `ErrIO`. The library retains each raw cause
-  behind `Causer` while keeping callback text out of `Error()`.
+  primary and cancellation adds `ErrIO`. One standard `errors.As` to `Causer`
+  exposes a cause retaining every non-nil raw cause while callback text remains
+  absent from `Error()`.
 
 ## Limits and completeness
 

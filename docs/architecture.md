@@ -52,7 +52,9 @@ trailing input fails closed under stable sentinels. The library emits no logs
 and error text contains operation names, never payloads or callback text.
 Raw underlying causes are available only through `Causer`, not sentinel
 traversal, so a callback returning (for example) `ErrComplete` cannot forge
-completion. Those causes may contain sensitive consumer data and require
+completion. For combined outcomes, the first standard `errors.As` match for
+`Causer` exposes one cause whose `errors.Is` traversal retains every non-nil raw
+cause. Those causes may contain sensitive consumer data and require
 consumer-controlled redaction before logging or display. A successful record
 checkpoint is not proof that the archive is complete; only `Manifest` after a
 library-produced `ErrComplete` is the completeness oracle.
