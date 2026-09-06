@@ -2,10 +2,14 @@
 
 ## Endpoints
 
-- Canonical development and change tracking:
-  <https://git.dannyhunn.com/agents/gotth-portability>
+- Canonical development source:
+  <https://git.dannyhunn.com/gotthboard/gotth-portability>
 - Public clone and, only after independent implementation admission, future releases:
   <https://github.com/gotthboard/gotth-portability>
+- Public bug tracker:
+  <https://github.com/gotthboard/gotth-portability/issues>
+- Private vulnerability reports:
+  <https://github.com/gotthboard/gotth-portability/security/advisories/new>
 
 Forgejo pushes one way to GitHub. GitHub does not feed commits or tags back to
 Forgejo. A ref is distributed only when the exact object ID is visible at both
