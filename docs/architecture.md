@@ -32,6 +32,9 @@ deadline, make `Commit` idempotent by archive identity and sequence, and treat
 a commit error or cancellation observed after `Commit` as potentially having
 taken effect. The library cannot resolve a consumer backend's unknown commit
 outcome and therefore neither aborts nor advances its checkpoint then.
+If `Commit` both returns an error and leaves the operation context canceled,
+the sink error remains the primary `ErrSink` classification and cancellation is
+retained as an additional `ErrIO` classification.
 If `Begin` returns both a stage and an error, the begin error remains primary
 and the stage receives bounded `Abort`. Cancellation observed after that
 callback is retained as an additional `ErrIO` classification rather than

@@ -243,11 +243,17 @@ func (i *Importer) readRecord(ctx context.Context, sink Sink) (Checkpoint, error
 		return Checkpoint{}, i.abort(ctx, stage, wrap(ErrIO, "commit record", err))
 	}
 	commitErr := stage.Commit(ctx)
-	if err := ctx.Err(); err != nil {
-		return Checkpoint{}, wrap(ErrIO, "commit record; outcome may be unknown", err)
-	}
+	commitContextErr := ctx.Err()
 	if commitErr != nil {
-		return Checkpoint{}, wrap(ErrSink, "commit record; outcome may be unknown", commitErr)
+		primary := wrap(ErrSink, "commit record; outcome may be unknown", commitErr)
+		if commitContextErr != nil {
+			canceled := wrap(ErrIO, "commit record; outcome may be unknown", commitContextErr)
+			return Checkpoint{}, errors.Join(primary, canceled)
+		}
+		return Checkpoint{}, primary
+	}
+	if commitContextErr != nil {
+		return Checkpoint{}, wrap(ErrIO, "commit record; outcome may be unknown", commitContextErr)
 	}
 	i.cp.chain = nextChain(i.cp.chain, prefix, digest)
 	i.cp.records++

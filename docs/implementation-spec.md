@@ -60,7 +60,8 @@ callback allocations.
 - Failures before commit call `Abort` with a cancellation-independent context
   whose deadline is `AbortTimeout`. A commit error, or cancellation observed
   after a commit call, has unknown outcome and does not call `Abort` or advance
-  the checkpoint.
+  the checkpoint. If both occur, the result retains primary `ErrSink` and
+  additional `ErrIO` classifications plus both explicit raw causes.
 - `Sink.Begin` may return a non-nil stage with an error. The begin error remains
   primary and the library runs bounded `Abort` on that stage. Cancellation
   observed after the callback adds `ErrIO` without discarding `ErrSink` or its

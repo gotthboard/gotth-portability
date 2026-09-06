@@ -220,6 +220,7 @@ func TestExporterCancellationSeamsKeepPriorCheckpoint(t *testing.T) {
 type cancelingStage struct {
 	cancel        context.CancelFunc
 	cancelCommit  bool
+	commitErr     error
 	aborts        int
 	commits       int
 	abortDeadline time.Time
@@ -349,7 +350,7 @@ func (s *cancelingStage) Commit(context.Context) error {
 	if s.cancelCommit {
 		s.cancel()
 	}
-	return nil
+	return s.commitErr
 }
 func (s *cancelingStage) Abort(ctx context.Context) error {
 	s.aborts++
@@ -442,6 +443,25 @@ func TestImporterCancellationSeamsAndBoundedAbort(t *testing.T) {
 		stage := &cancelingStage{cancel: cancel, cancelCommit: true}
 		_, err = im.Next(ctx, SinkFunc(func(context.Context, Header, RecordMeta) (RecordSink, error) { return stage, nil }))
 		if !errors.Is(err, ErrIO) || !causeIs(err, context.Canceled) || stage.commits != 1 || stage.aborts != 0 || im.Checkpoint() != prior {
+			t.Fatalf("error=%v commits=%d aborts=%d checkpoint=%#v", err, stage.commits, stage.aborts, im.Checkpoint())
+		}
+	})
+
+	t.Run("commit failure and cancellation retain both outcomes", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		im, err := NewImporter(ctx, bytes.NewReader(recordArchive), Limits{}, acceptExact)
+		if err != nil {
+			t.Fatal(err)
+		}
+		prior := im.Checkpoint()
+		commitErr := errors.New("commit-sensitive")
+		stage := &cancelingStage{cancel: cancel, cancelCommit: true, commitErr: commitErr}
+		_, err = im.Next(ctx, SinkFunc(func(context.Context, Header, RecordMeta) (RecordSink, error) { return stage, nil }))
+		assertClassSet(t, err, ErrSink, ErrIO)
+		if !containsExplicitCause(err, commitErr) || !containsExplicitCause(err, context.Canceled) {
+			t.Fatalf("error causes = %v", err)
+		}
+		if strings.Contains(err.Error(), commitErr.Error()) || stage.commits != 1 || stage.aborts != 0 || im.Checkpoint() != prior {
 			t.Fatalf("error=%v commits=%d aborts=%d checkpoint=%#v", err, stage.commits, stage.aborts, im.Checkpoint())
 		}
 	})

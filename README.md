@@ -50,8 +50,10 @@ application.
 - A sink commit error has an unknown outcome. Sinks must reconcile and make
   commits idempotent by archive ID and sequence before resuming.
 - Cancellation is checked before and after every caller-owned I/O or callback.
-  A canceled commit is also an unknown outcome. Best-effort `Abort` receives a
-  fresh context bounded by `AbortTimeout`; sink implementations must honor it.
+  A canceled commit is also an unknown outcome. If commit fails while leaving
+  the context canceled, both `ErrSink` and `ErrIO` are retained. Best-effort
+  `Abort` receives a fresh context bounded by `AbortTimeout`; sink
+  implementations must honor it.
   If `Begin` returns both a stage and an error, that stage is aborted; any
   cancellation observed after the callback is also retained as `ErrIO`.
   Cleanup deadline expiry is reported as `ErrSink` even if `Abort` returns nil.
