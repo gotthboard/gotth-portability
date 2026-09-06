@@ -23,6 +23,10 @@
   conforming sink must honor; the library cannot stop a sink that ignores it.
   Once `Abort` returns, deadline expiry is reported as `ErrSink` even if its
   direct return is nil.
+- When a compatibility, staged-write, begin, or commit callback both produces
+  a semantic failure and leaves the context canceled, the semantic class stays
+  primary and cancellation adds `ErrIO`. The library retains each raw cause
+  behind `Causer` while keeping callback text out of `Error()`.
 
 ## Limits and completeness
 

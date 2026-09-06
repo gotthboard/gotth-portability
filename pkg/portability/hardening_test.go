@@ -226,6 +226,28 @@ type cancelingStage struct {
 	abortDeadline time.Time
 }
 
+type cancelingWriteStage struct {
+	cancel   context.CancelFunc
+	writeErr error
+	aborts   int
+	commits  int
+}
+
+func (s *cancelingWriteStage) Write([]byte) (int, error) {
+	s.cancel()
+	return 0, s.writeErr
+}
+
+func (s *cancelingWriteStage) Commit(context.Context) error {
+	s.commits++
+	return nil
+}
+
+func (s *cancelingWriteStage) Abort(context.Context) error {
+	s.aborts++
+	return nil
+}
+
 type abortBehaviorStage struct {
 	abortFn     func(context.Context) error
 	aborts      int
@@ -479,6 +501,83 @@ func TestImporterCancellationSeamsAndBoundedAbort(t *testing.T) {
 		}
 		if _, manifestErr := im.Manifest(); !errors.Is(manifestErr, ErrIncomplete) {
 			t.Fatalf("manifest = %v", manifestErr)
+		}
+	})
+}
+
+func TestImporterCombinedCallbackOutcomes(t *testing.T) {
+	recordArchive := archiveBytes(t, Record{Kind: "x", Size: 1, Body: strings.NewReader("a")})
+	compatibilityErr := errors.New("compatibility-sensitive")
+
+	t.Run("new importer compatibility failure and cancellation", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		_, err := NewImporter(ctx, bytes.NewReader(recordArchive), Limits{}, func(context.Context, Header) error {
+			cancel()
+			return compatibilityErr
+		})
+		assertClassSet(t, err, ErrIncompatible, ErrIO)
+		if !containsExplicitCause(err, compatibilityErr) || !containsExplicitCause(err, context.Canceled) {
+			t.Fatalf("error causes = %v", err)
+		}
+		if strings.Contains(err.Error(), compatibilityErr.Error()) {
+			t.Fatalf("public error leaked callback text: %q", err)
+		}
+	})
+
+	t.Run("resume importer compatibility failure and cancellation", func(t *testing.T) {
+		var archive bytes.Buffer
+		ex, err := NewExporter(context.Background(), &archive, testHeader(), Limits{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		input := &countingReader{r: bytes.NewReader(nil)}
+		ctx, cancel := context.WithCancel(context.Background())
+		_, err = ResumeImporter(ctx, input, ex.Checkpoint(), Limits{}, func(context.Context, Header) error {
+			cancel()
+			return compatibilityErr
+		})
+		assertClassSet(t, err, ErrIncompatible, ErrIO)
+		if !containsExplicitCause(err, compatibilityErr) || !containsExplicitCause(err, context.Canceled) {
+			t.Fatalf("error causes = %v", err)
+		}
+		if strings.Contains(err.Error(), compatibilityErr.Error()) || input.calls != 0 {
+			t.Fatalf("resume=%v reads=%d", err, input.calls)
+		}
+	})
+
+	t.Run("staged write failure and cancellation", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		im, err := NewImporter(ctx, bytes.NewReader(recordArchive), Limits{}, acceptExact)
+		if err != nil {
+			t.Fatal(err)
+		}
+		prior := im.Checkpoint()
+		writeErr := errors.New("write-sensitive")
+		stage := &cancelingWriteStage{cancel: cancel, writeErr: writeErr}
+		_, err = im.Next(ctx, SinkFunc(func(context.Context, Header, RecordMeta) (RecordSink, error) { return stage, nil }))
+		assertClassSet(t, err, ErrSink, ErrIO)
+		if !containsExplicitCause(err, writeErr) || !containsExplicitCause(err, context.Canceled) {
+			t.Fatalf("error causes = %v", err)
+		}
+		if strings.Contains(err.Error(), writeErr.Error()) || stage.aborts != 1 || stage.commits != 0 || im.Checkpoint() != prior {
+			t.Fatalf("error=%v aborts=%d commits=%d checkpoint=%#v", err, stage.aborts, stage.commits, im.Checkpoint())
+		}
+	})
+
+	t.Run("nil stage and cancellation", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		im, err := NewImporter(ctx, bytes.NewReader(recordArchive), Limits{}, acceptExact)
+		if err != nil {
+			t.Fatal(err)
+		}
+		prior := im.Checkpoint()
+		_, err = im.Next(ctx, SinkFunc(func(context.Context, Header, RecordMeta) (RecordSink, error) {
+			cancel()
+			return nil, nil
+		}))
+		assertClassSet(t, err, ErrSink, ErrIO)
+		if !containsExplicitCause(err, context.Canceled) || im.Checkpoint() != prior {
+			t.Fatalf("error=%v checkpoint=%#v", err, im.Checkpoint())
 		}
 	})
 }

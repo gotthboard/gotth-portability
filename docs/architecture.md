@@ -35,11 +35,15 @@ outcome and therefore neither aborts nor advances its checkpoint then.
 If `Commit` both returns an error and leaves the operation context canceled,
 the sink error remains the primary `ErrSink` classification and cancellation is
 retained as an additional `ErrIO` classification.
+If `Compatibility` returns an error while canceling, incompatibility remains
+primary and cancellation is additional. A staged `Write` failure follows the
+same rule with primary `ErrSink`. Both cases retain both explicit raw causes.
 If `Begin` returns both a stage and an error, the begin error remains primary
 and the stage receives bounded `Abort`. Cancellation observed after that
 callback is retained as an additional `ErrIO` classification rather than
-discarded. An expired cleanup context is reported as an additional `ErrSink`
-failure even when `Abort` returns nil.
+discarded. A nil stage returned without an error is still `ErrSink` when
+cancellation adds `ErrIO`. An expired cleanup context is reported as an
+additional `ErrSink` failure even when `Abort` returns nil.
 
 ## Failure model
 

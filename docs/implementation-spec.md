@@ -46,7 +46,9 @@ callback allocations.
   writes, `Commit`, and all reads are cancellation-bracketed. `Importer.Checkpoint`
   returns the last committed boundary even after an unknown sink-commit outcome.
   `ResumeImporter` restores validated boundary state and trusts the caller to
-  position input at the checkpoint offset.
+  position input at the checkpoint offset. If `Compatibility` both rejects and
+  cancels, the result retains primary `ErrIncompatible`, additional `ErrIO`,
+  and both explicit raw causes.
 - `Next` stages, streams, validates, and commits one record. It returns
   `ErrComplete` only after footer and EOF validation. `Manifest` fails until
   that explicit completion state exists.
@@ -65,8 +67,11 @@ callback allocations.
 - `Sink.Begin` may return a non-nil stage with an error. The begin error remains
   primary and the library runs bounded `Abort` on that stage. Cancellation
   observed after the callback adds `ErrIO` without discarding `ErrSink` or its
-  raw cause. Cleanup context expiry adds `ErrSink`, including when `Abort`
-  returns nil after the deadline.
+  raw cause. A nil stage returned without an error remains `ErrSink` when
+  cancellation adds `ErrIO`. A staged `Write` error remains primary `ErrSink`
+  when callback cancellation adds `ErrIO`; both explicit causes survive and
+  bounded `Abort` still runs. Cleanup context expiry adds `ErrSink`, including
+  when `Abort` returns nil after the deadline.
 - Checkpoints have a versioned binary encoding protected by SHA-256. Decoding
   rejects corruption, unknown versions, and structurally inconsistent state.
 

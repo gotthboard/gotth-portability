@@ -1,7 +1,7 @@
 .PHONY: verify
 
 verify:
-	gofmt -w $$(find . -name '*.go' -not -path './.git/*')
+	test -z "$$(gofmt -l $$(find . -name '*.go' -not -path './.git/*'))"
 	git diff --check -- .
 	go vet -mod=readonly ./...
 	go test -mod=readonly -race -cover ./...

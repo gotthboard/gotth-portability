@@ -65,7 +65,8 @@ type Manifest struct {
 }
 
 // Compatibility validates the consumer-owned schema contract. Returning an
-// error rejects the archive before any record sink is opened.
+// error rejects the archive before any record sink is opened. If the callback
+// also cancels its context, both ErrIncompatible and ErrIO are retained.
 type Compatibility func(context.Context, Header) error
 
 // Causer exposes the raw callback or I/O cause without adding that cause to
@@ -79,7 +80,8 @@ type Causer interface {
 }
 
 // RecordSink stages one imported record. Commit must be idempotent for archive
-// identity and sequence; Abort must discard uncommitted bytes.
+// identity and sequence; Abort must discard uncommitted bytes. A staged Write
+// failure that also cancels its context retains both ErrSink and ErrIO.
 type RecordSink interface {
 	io.Writer
 	Commit(context.Context) error
@@ -89,7 +91,9 @@ type RecordSink interface {
 // Sink begins consumer-owned staging for one record. If Begin returns both a
 // non-nil RecordSink and a non-nil error, the library calls Abort on that stage
 // before returning the begin failure. Cancellation observed after Begin is
-// additionally classified as ErrIO rather than suppressing either outcome.
+// additionally classified as ErrIO rather than suppressing either outcome. A
+// nil stage returned without an error is ErrSink, including when cancellation
+// adds ErrIO to that result.
 type Sink interface {
 	Begin(context.Context, Header, RecordMeta) (RecordSink, error)
 }

@@ -50,12 +50,18 @@ application.
 - A sink commit error has an unknown outcome. Sinks must reconcile and make
   commits idempotent by archive ID and sequence before resuming.
 - Cancellation is checked before and after every caller-owned I/O or callback.
+  If `Compatibility` rejects while canceling its context, `ErrIncompatible`
+  remains primary and `ErrIO` is retained with both explicit causes. A staged
+  `Write` failure that also cancels retains primary `ErrSink`, additional
+  `ErrIO`, and both causes.
   A canceled commit is also an unknown outcome. If commit fails while leaving
   the context canceled, both `ErrSink` and `ErrIO` are retained. Best-effort
   `Abort` receives a fresh context bounded by `AbortTimeout`; sink
   implementations must honor it.
   If `Begin` returns both a stage and an error, that stage is aborted; any
-  cancellation observed after the callback is also retained as `ErrIO`.
+  cancellation observed after the callback is also retained as `ErrIO`. A
+  nil stage with no begin error remains `ErrSink` when cancellation adds
+  `ErrIO`.
   Cleanup deadline expiry is reported as `ErrSink` even if `Abort` returns nil.
 - Record commit is atomic only to the degree supplied by the consumer sink.
   There is no multi-record transaction or exactly-once external effect.

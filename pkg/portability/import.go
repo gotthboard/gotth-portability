@@ -45,11 +45,15 @@ func NewImporter(ctx context.Context, r io.Reader, limits Limits, compatibility 
 		return nil, wrap(ErrIO, "consumer schema", err)
 	}
 	compatibilityErr := compatibility(ctx, header)
+	if compatibilityErr != nil {
+		primary := wrap(ErrIncompatible, "consumer schema", compatibilityErr)
+		if contextErr := ctx.Err(); contextErr != nil {
+			return nil, errors.Join(primary, wrap(ErrIO, "consumer schema", contextErr))
+		}
+		return nil, primary
+	}
 	if err := ctx.Err(); err != nil {
 		return nil, wrap(ErrIO, "consumer schema", err)
-	}
-	if compatibilityErr != nil {
-		return nil, wrap(ErrIncompatible, "consumer schema", compatibilityErr)
 	}
 	chain := sha256.Sum256(encoded)
 	cp := Checkpoint{header: header, offset: uint64(len(encoded)), chain: chain}
@@ -80,11 +84,15 @@ func ResumeImporter(ctx context.Context, r io.Reader, checkpoint Checkpoint, lim
 		return nil, wrap(ErrIO, "consumer schema", err)
 	}
 	compatibilityErr := compatibility(ctx, checkpoint.header)
+	if compatibilityErr != nil {
+		primary := wrap(ErrIncompatible, "consumer schema", compatibilityErr)
+		if contextErr := ctx.Err(); contextErr != nil {
+			return nil, errors.Join(primary, wrap(ErrIO, "consumer schema", contextErr))
+		}
+		return nil, primary
+	}
 	if err := ctx.Err(); err != nil {
 		return nil, wrap(ErrIO, "consumer schema", err)
-	}
-	if compatibilityErr != nil {
-		return nil, wrap(ErrIncompatible, "consumer schema", compatibilityErr)
 	}
 	return &Importer{r: r, limits: normalized, cp: checkpoint, readOffset: checkpoint.offset}, nil
 }
@@ -218,15 +226,16 @@ func (i *Importer) readRecord(ctx context.Context, sink Sink) (Checkpoint, error
 		}
 		return Checkpoint{}, primary
 	}
-	if beginContextErr != nil {
-		primary := wrap(ErrIO, "begin record", beginContextErr)
-		if stage != nil {
-			return Checkpoint{}, i.abort(ctx, stage, primary)
+	if stage == nil {
+		primary := wrap(ErrSink, "begin record", nil)
+		if beginContextErr != nil {
+			return Checkpoint{}, errors.Join(primary, wrap(ErrIO, "begin record", beginContextErr))
 		}
 		return Checkpoint{}, primary
 	}
-	if stage == nil {
-		return Checkpoint{}, wrap(ErrSink, "begin record", nil)
+	if beginContextErr != nil {
+		primary := wrap(ErrIO, "begin record", beginContextErr)
+		return Checkpoint{}, i.abort(ctx, stage, primary)
 	}
 	digest, err := i.copyPayload(ctx, stage, meta.Size)
 	if err != nil {
@@ -294,11 +303,20 @@ func (i *Importer) copyPayload(ctx context.Context, dst io.Writer, size uint64) 
 		if err := i.readExact(ctx, buf[:int(want)], "read payload"); err != nil {
 			return [32]byte{}, err
 		}
-		if _, err := writeExactContext(ctx, dst, buf[:int(want)]); err != nil {
-			if ctxErr := ctx.Err(); ctxErr != nil {
-				return [32]byte{}, wrap(ErrIO, "write staged record", ctxErr)
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return [32]byte{}, wrap(ErrIO, "write staged record", ctxErr)
+		}
+		_, writeErr := writeExact(dst, buf[:int(want)])
+		writeContextErr := ctx.Err()
+		if writeErr != nil {
+			primary := wrap(ErrSink, "write staged record", writeErr)
+			if writeContextErr != nil {
+				return [32]byte{}, errors.Join(primary, wrap(ErrIO, "write staged record", writeContextErr))
 			}
-			return [32]byte{}, wrap(ErrSink, "write staged record", err)
+			return [32]byte{}, primary
+		}
+		if writeContextErr != nil {
+			return [32]byte{}, wrap(ErrIO, "write staged record", writeContextErr)
 		}
 		writeHash(h, buf[:int(want)])
 		remaining -= want
