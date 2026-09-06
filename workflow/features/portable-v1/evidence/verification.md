@@ -26,6 +26,8 @@
   `4596963503d856438ea415dcacce3619f8085436`.
 - Combined importer-outcome and non-mutating verification correction:
   `efa533ae2c212e5a94c983ec3ab512d267dd65a2`.
+- Combined-cause public-idiom correction:
+  `ac7616b18b6d31282c1c402f7f30353bc6006f9e`.
 - Branch/worktree: `feature/v1-portability` at
   `/tmp/gotth-portability-worktrees/v1-portability`.
 - No push, PR, tag, release, deployment, live database, secret, GOTTH Board, or
@@ -48,6 +50,9 @@ composition rule preserves compatibility rejection, staged-write failure, and
 nil-stage sink failure when cancellation is observed. SHA-256 provides
 integrity, not producer authentication. `Causer.Cause` is raw and potentially
 sensitive; only `Error()` is redaction-safe.
+For combined outcomes, one standard `errors.As` to public `Causer` returns a
+cause whose `errors.Is` traversal retains every non-nil raw cause. Raw causes
+remain excluded from the outer classification traversal.
 
 ## Toolchain and capacity
 
@@ -65,6 +70,71 @@ sensitive; only `Error()` is redaction-safe.
   were small enough for bounded direct reads and `/usr/bin/rg`.
 
 ## Correctness gates
+
+The final focused repair started from exact clean local HEAD
+`caca81db958647e581190104b2b5d04c730fc0de`. Exact implementation
+`ac7616b18b6d31282c1c402f7f30353bc6006f9e` was transferred as a complete Git
+bundle, without pushing a ref, and checked out detached in the isolated clean
+clone `/tmp/gotth-portability-ac7616b.41ue1v/repo` on `development`.
+
+With Go 1.26.6, repository `make verify`, a separate full test, race test,
+coverage test, all four five-second fuzz targets, a fresh external-consumer
+module, performance samples, and five benchmark samples all passed. Coverage
+is 94.5%. The fuzz targets completed 2,460,552 roundtrip, 1,906,286 checkpoint,
+3,063,225 bounded arbitrary archive, and 836,486 mutation-oracle executions.
+The external module passed readonly race, vet, and build. Performance and
+allocation results are recorded in `docs/performance.md` without a speedup
+claim.
+
+Every gate trace records exact source and tree IDs, Go version, literal command,
+timestamps, command status, integrity status, raw-output hash, and exact HEAD
+plus porcelain-v2 status before and after. All command and integrity statuses
+are zero; all before/after snapshots are clean and remain at `ac7616b`. The
+artifact index verifies in full on both `development` and the local host.
+
+Public-package regression tests use one ordinary `errors.As` to `Causer` for
+compatibility rejection plus cancellation in `NewImporter` and
+`ResumeImporter`, nil/nil `Begin` plus cancellation, staged `Write` failure plus
+cancellation, `Commit` failure plus cancellation, and staged failure plus
+`Abort` failure. They require all library classifications, every non-nil raw
+cause through a standard `Unwrap() []error` aggregate, redacted public text,
+and exclusion of every raw cause from outer `errors.Is` traversal. Private
+tests now use that same public idiom instead of recursively searching every
+sibling error and concealing first-match behavior.
+
+| Exact source `ac7616b` retained artifact | SHA-256 |
+| --- | --- |
+| `/tmp/gotth-portability-verify-ac7616b.log` | `3c31e00db12ec0f2ca4199b9c5b77e0cc134e20d349f16885c8f08b291570a33` |
+| `/tmp/gotth-portability-verify-ac7616b.raw.log` | `c9a57f83f51c129a8eb2db69b03e31825f90615e9980fd085542f7e069b57ac4` |
+| `/tmp/gotth-portability-full-ac7616b.log` | `97f8161a19ee60ad45c9c3d7d416c257ee05281f688cce99afd4948c3a5f92f5` |
+| `/tmp/gotth-portability-full-ac7616b.raw.log` | `bab498a7601b024f25cb5a57e5ca782713f62defd3384f0eacc57f0a28dc4c63` |
+| `/tmp/gotth-portability-race-ac7616b.log` | `b68666e8bbf943c758f7b4b8d771ee587ae0270f0bee09c0a69000d273d9a56a` |
+| `/tmp/gotth-portability-race-ac7616b.raw.log` | `1a29ecaf7d72e04898676e4722693b543dce080539e50dd39edc879ef8ab2ba2` |
+| `/tmp/gotth-portability-coverage-ac7616b.log` | `3e3c56463a1551c00b79f39e350e323b4a754c70225dc8025c1393922c67b7e0` |
+| `/tmp/gotth-portability-coverage-ac7616b.raw.log` | `2607141bac62e9976170de1a736c33cf0cc0d7ce9eb868893471013431d1895a` |
+| `/tmp/gotth-portability-coverage-ac7616b.out` | `50ef7dc6f687199b7e328a3d148422b5f243a20e9995c3cbdf35473664a22002` |
+| `/tmp/gotth-portability-coverage-functions-ac7616b.log` | `1679de15f454ebc34c41166d665125672998770e2a600936e28f3ecf6aae8abe` |
+| `/tmp/gotth-portability-coverage-functions-ac7616b.raw.log` | `9e1c7b6808c3394a089d6a9c9a756aaf6d00ce3002bac6bca11639e509bf7f7e` |
+| `/tmp/gotth-portability-fuzz-roundtrip-ac7616b.log` | `38918e42bb14ab06daefcd2634c3a9a8d7eecf2323f8e992bda6832bca06ab4e` |
+| `/tmp/gotth-portability-fuzz-roundtrip-ac7616b.raw.log` | `6ce538ddbaef0bd6502a64658f9ca12a4d5a41f774eec335096918ea59abb4e2` |
+| `/tmp/gotth-portability-fuzz-checkpoint-ac7616b.log` | `e00238dcc33781892051fce82f7f22c68c36446625220f3097a33e3a21c4435b` |
+| `/tmp/gotth-portability-fuzz-checkpoint-ac7616b.raw.log` | `826ac39a31355f56f5520f9b3c605ac6746f6cc7a51bbb54cc81e9b58064ce1f` |
+| `/tmp/gotth-portability-fuzz-arbitrary-ac7616b.log` | `9173da1c8c84a0085793c9b0aa61ccdd72f38c73e198f2d30b569a901fbfbbb4` |
+| `/tmp/gotth-portability-fuzz-arbitrary-ac7616b.raw.log` | `6cb82814a49055745ab65963706b9f3a0595191067458479e9bac40e8d74cab2` |
+| `/tmp/gotth-portability-fuzz-mutation-ac7616b.log` | `f2a4ed8daa3f4ca61ec086c8d7fd6569c7c2206402410be15cf343146789cc6d` |
+| `/tmp/gotth-portability-fuzz-mutation-ac7616b.raw.log` | `270810a758e63a91ab80e784f1b86865aa747c77e5ebe5fdd1c66b4de30876d8` |
+| `/tmp/gotth-portability-external-ac7616b.log` | `d36a30c5821a962d956f20545d84f0e928de463132474e107ded82bffefbd8bf` |
+| `/tmp/gotth-portability-external-ac7616b.raw.log` | `c79295f08c2d93ff782d2c920cd85d81cf84154cc341ac36b4e8c5539786d3b5` |
+| `/tmp/gotth-portability-performance-ac7616b.log` | `098151d90d410e67e49a11103a7e7ea454ce789cca3b6f5746212c5e940532e6` |
+| `/tmp/gotth-portability-performance-ac7616b.raw.log` | `8738d743e05f6ffb74bee4eb406d4e0d65c4dcdb8fd820d6cfb05d8fda6fee4c` |
+| `/tmp/gotth-portability-benchmark-ac7616b.log` | `4f53f232afd20677242341fa0d5193edc9dafb4c272a1f5424af6d6e3ee80e62` |
+| `/tmp/gotth-portability-benchmark-ac7616b.raw.log` | `82677b94dbf461336fdabe321052ae92edaf8876a8f096e85e52b541439ac195` |
+| `/tmp/gotth-portability-development-summary-ac7616b.txt` | `ccf27a707f65fea957bde9926af0b9f7dabf68639a9d60b49b1732b6bee3f435` |
+| `/tmp/gotth-portability-artifacts-ac7616b.sha256` | `6c14120a716c2d1020d86622216d0b0c4ff289c40b5a06030421ce6b76216fd6` |
+| `/tmp/gotth-portability-development-gates-ac7616b.sh` | `1886f7640cef88990f72ddd06a5b16fa11daa22b32d0982a96359e4ae3a311b4` |
+| `/tmp/gotth-portability-ac7616b.bundle` | `b22a2caf6b4fb6b5f4b47950afbcf4a5d5111c6dd163115da166687911e89f56` |
+
+### Previous combined-outcome repair
 
 The repair cycle started from exact clean local HEAD
 `182cd34bd5867fdb77400a505f5a6386617126ee`. Exact implementation
@@ -466,6 +536,17 @@ behavior intact, and changes verification to a failing non-mutating `gofmt -l`
 check. The adjacent outcome audit found no further importer classification
 change to admit. Full exact-source development gates and before/after clean
 traces bind the repair. Final admission remains outside worker authority.
+Independent review of evidence head `caca81d` then found that sibling
+`Causer` errors under `errors.Join` did not satisfy the documented cause
+retention through the ordinary public idiom: `errors.As` returns only its first
+match, losing later raw causes, and nil/nil Begin plus cancellation could expose
+a nil cause. Exact source `ac7616b` adds one private combined error whose outer
+unwrap tree contains only redacted classifications and whose first `Causer`
+match exposes a standard multi-error retaining every non-nil raw cause. Public
+tests cover compatibility, Begin, staged Write, Commit, and Abort combinations;
+private tests no longer conceal the defect through recursive sibling search.
+Full exact-source development gates and clean before/after traces bind the
+repair. Final admission remains outside worker authority.
 
 ## Remaining gate
 

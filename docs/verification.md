@@ -1,34 +1,36 @@
 # Verification status
 
 Current worker verification binds exact source
-`efa533ae2c212e5a94c983ec3ab512d267dd65a2`.
+`ac7616b18b6d31282c1c402f7f30353bc6006f9e`.
 
 - Lightweight local checks used `GOMAXPROCS=2` and `-p=1`: focused importer
-  outcome tests, package vet, package build, non-mutating `gofmt -l`, and
-  `git diff --check` all passed.
+  combined-error tests, package vet, package compile, non-mutating `gofmt -l`,
+  and `git diff --check` all passed.
 - Full verification ran only on `development`, in the isolated clean detached
-  clone `/tmp/gotth-portability-efa533a.bmHfmt/repo`, with Go 1.26.6. Repository
+  clone `/tmp/gotth-portability-ac7616b.41ue1v/repo`, with Go 1.26.6. Repository
   `make verify`, an independent full test, race test, coverage test, all four
   fuzz targets, an external-consumer module, performance samples, and five
   benchmark samples all passed.
 - Every development trace records the literal command, exact source/tree IDs,
   toolchain, timestamps, exit status, raw-output hash, and exact `HEAD` plus
   porcelain-v2 status before and after. Every command began and ended clean at
-  `efa533a`. In particular, `make verify` used the failing, non-mutating
+  `ac7616b`. In particular, `make verify` used the failing, non-mutating
   `gofmt -l` check and left exact `HEAD` and status unchanged.
-- Statement coverage is 94.9%. `ResumeImporter` remains 100% covered. The four
-  repaired combined outcomes have direct tests: `NewImporter` and
-  `ResumeImporter` compatibility rejection plus cancellation, staged `Write`
-  failure plus cancellation, and `Begin` returning nil/nil plus cancellation.
-  Tests assert the exact class set, every explicit raw cause, redacted public
-  text, checkpoint preservation, and required Abort/Commit behavior.
+- Statement coverage is 94.5%. External-package tests use one standard
+  `errors.As` to public `Causer` for compatibility in both constructors,
+  nil/nil `Begin` plus cancellation, staged `Write` failure plus cancellation,
+  `Commit` failure plus cancellation, and staged failure plus `Abort` failure.
+  Each result retains every expected library classification and non-nil raw
+  cause while excluding raw causes from outer `errors.Is` traversal and
+  `Error()` text. The returned cause implements standard `Unwrap() []error`.
 - The adjacent importer outcome audit rechecked compatibility-only,
   cancellation-only, begin-error, begin-stage cleanup, staged-write-only,
   commit-only, commit-cancellation, and abort-failure paths. Existing
-  classifications remain unchanged outside the four verified repairs.
-- Five-second fuzzing passed 2,344,018 valid roundtrip executions, 1,614,245
-  arbitrary checkpoint executions, 3,094,791 bounded arbitrary archive
-  executions, and 837,707 valid-archive mutation executions. Exact-valid
+  classifications remain unchanged; private tests now use the same single
+  `errors.As` idiom instead of recursively searching sibling errors.
+- Five-second fuzzing passed 2,460,552 valid roundtrip executions, 1,906,286
+  arbitrary checkpoint executions, 3,063,225 bounded arbitrary archive
+  executions, and 836,486 valid-archive mutation executions. Exact-valid
   fuzzing requires committed payload/count/chain state and a valid Manifest;
   invalid mutations cannot produce forbidden commit or completion state.
 - A fresh external module resolved the unreleased package through a local

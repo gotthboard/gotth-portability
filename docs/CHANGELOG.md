@@ -8,6 +8,55 @@ uses the named commit's Git author time, rendered to the minute in CDT.
 
 ## Unreleased
 
+### 2026-09-05 23:09 CDT — Preserve every combined raw cause
+
+Implementation commit: `ac7616b18b6d31282c1c402f7f30353bc6006f9e`.
+Evidence commit: this documentation-only commit. The heading uses the verified
+implementation commit author time.
+
+Affected files:
+
+- `README.md`
+- `docs/CHANGELOG.md`
+- `docs/architecture.md`
+- `docs/implementation-spec.md`
+- `docs/performance.md`
+- `docs/runtime-boundary.md`
+- `docs/verification.md`
+- `pkg/portability/errors.go`
+- `pkg/portability/hardening_test.go`
+- `pkg/portability/import.go`
+- `pkg/portability/public_api_test.go`
+- `pkg/portability/types.go`
+- `workflow/COVERAGE.md`
+- `workflow/features/portable-v1/evidence/verification.md`
+
+Explanation:
+
+Replace sibling `errors.Join` composition with a private redaction-safe
+combined error. Stable classifications remain in outer `errors.Is` traversal,
+raw callback text remains absent from `Error()`, and the first standard
+`errors.As` match for public `Causer` now returns a standard multi-error that
+retains every non-nil raw cause. Remove private recursive cause searching and
+cover compatibility, nil/nil Begin, staged Write, Commit, and Abort combinations
+through the external package API.
+
+Verification:
+
+- lightweight local focused test, vet, compile, format-list, and diff checks
+- exact clean detached `development` clone on Go 1.26.6 passed `make verify`,
+  full, race, 94.5% coverage, four fuzz, external-consumer, performance, and
+  benchmark gates
+- every remote gate retained identical exact HEAD and clean porcelain-v2 status
+  before and after; all retained artifact hashes verify
+
+Risks / non-goals:
+
+- The V1 wire format and exported API shape are unchanged. Combined failure
+  paths add bounded error storage only when multiple outcomes occur.
+- No unrelated callback, protocol, permission, or workflow change was admitted.
+  Workflow stays `in_progress`; final admission remains orchestrator-owned.
+
 ### 2026-09-05 22:39 CDT — Preserve combined importer outcomes
 
 Implementation commit: `efa533ae2c212e5a94c983ec3ab512d267dd65a2`.

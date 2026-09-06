@@ -2,25 +2,25 @@
 
 ## Repair-cycle verification
 
-Exact source `efa533ae2c212e5a94c983ec3ab512d267dd65a2` passed fresh
+Exact source `ac7616b18b6d31282c1c402f7f30353bc6006f9e` passed fresh
 performance and benchmark gates in the isolated clean `development` clone
-`/tmp/gotth-portability-efa533a.bmHfmt/repo` using Go 1.26.6 on an AMD EPYC
-7551P. The failure-classification repair does not change successful payload
-processing, and this run makes no cross-host speedup claim.
+`/tmp/gotth-portability-ac7616b.41ue1v/repo` using Go 1.26.6 on an AMD EPYC
+7551P. The combined-error repair does not change successful payload processing,
+and this run makes no cross-host speedup claim.
 
-End-to-end medians were 2.470 us for an empty archive, 20.650 us for one 1 KiB
-record, 4.511955 ms for 16 x 64 KiB records, 19.085056 ms for 4 x 1 MiB
-records, and 2.551447 ms for 1,000 empty records. Five 500 ms benchmark samples
+End-to-end medians were 4.890 us for an empty archive, 27.771 us for one 1 KiB
+record, 7.334743 ms for 16 x 64 KiB records, 16.622896 ms for 4 x 1 MiB
+records, and 2.390997 ms for 1,000 empty records. Five 500 ms benchmark samples
 preserved the prior allocation shape: 304 B/3 allocations for zero-record
 export, 440 B/9 for one-empty export, 136,304-136,307 B/6,003 for 1,000-empty
 export, and 33,208 B/10 for non-empty export from 1 KiB through 16 MiB. Import
-used 544 B/21, 776 B/35, 232,545-232,546 B/14,021, and 33,544 B/36 for the
-same cases. Timing traces are host-specific; the stable evidence is unchanged
-bounded work and allocation shape.
+used 544 B/21, 776 B/35, 232,545-232,549 B/14,021, and 33,544-33,545 B/36 for
+the same cases. Timing traces are host-specific; the stable evidence is
+unchanged bounded work and allocation shape.
 
 The exact commands, all samples, clean before/after source status, and hashes
-are retained in `/tmp/gotth-portability-performance-efa533a.log` and
-`/tmp/gotth-portability-benchmark-efa533a.log`.
+are retained in `/tmp/gotth-portability-performance-ac7616b.log` and
+`/tmp/gotth-portability-benchmark-ac7616b.log`.
 
 ## Historical baseline decision
 
