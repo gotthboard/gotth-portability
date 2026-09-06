@@ -13,6 +13,7 @@
 | PORT-009 | PRD/non-goals | API and docs | external consumer and boundary audit | covered |
 | PORT-010 | distribution | `LICENSE` | license inventory | covered |
 
-The hardened source reports 94.5% statement coverage. The exact residual
+The admitted hardened source reports 94.5% statement coverage. Two fresh
+independent reviews of exact evidence head `6aeecae` returned CLEAN. The exact residual
 classes and why they do not leave claimed behavior untested are recorded in
 `docs/verification.md`; statement percentage is not the completeness oracle.

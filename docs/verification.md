@@ -51,6 +51,8 @@ Current worker verification binds exact source
   exact-source graph claim is made for this localized repair.
 
 All retained exact-source artifacts are indexed and hashed in
-`workflow/features/portable-v1/evidence/verification.md`. A real downstream
-consumer schema and dependency pin still do not exist. Workflow remains
-`in_progress` and unreleased; final admission is orchestrator-owned.
+`workflow/features/portable-v1/evidence/verification.md`. Two fresh independent
+reviews of exact evidence head `6aeecae201b839f27f4a7597536e8216373cc626`
+returned CLEAN. The standalone technical implementation is admitted and remains
+unreleased. A real downstream consumer schema and dependency pin are separate
+hard release gates and still do not exist.

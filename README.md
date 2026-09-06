@@ -1,7 +1,7 @@
 # gotth-portability
 
-> **Distribution:** GitHub is the public clone and, only if implementation is
-> admitted later, the future release endpoint.
+> **Distribution:** GitHub is the public clone and, after separate release
+> admission, the future release endpoint.
 > Forgejo remains canonical development and the issue/contribution location.
 > See [the distribution contract](docs/distribution.md).
 
@@ -97,10 +97,10 @@ retrying it.
 
 ## Status
 
-Implemented on an unreleased feature branch and awaiting independent admission.
-There is no tag, release, stable compatibility promise, or dependency version
-to pin. Wire format V1 and the Go API remain unstable until consumer pinning and
-release admission finish.
+The standalone implementation is technically admitted and unreleased. There is
+no tag, release, stable compatibility promise, or dependency version to pin.
+Wire format V1 and the Go API remain unstable until consumer pinning and release
+admission finish.
 
 ## Installation, compatibility, and support
 

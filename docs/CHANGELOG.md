@@ -8,6 +8,42 @@ uses the named commit's Git author time, rendered to the minute in CDT.
 
 ## Unreleased
 
+### 2026-09-05 23:23 CDT - Admit standalone portability implementation
+
+Commit: current commit; hash assigned by Git after commit.
+
+Affected files:
+
+- `README.md`
+- `docs/CHANGELOG.md`
+- `docs/verification.md`
+- `workflow.events.jsonl`
+- `workflow.toml`
+- `workflow/COVERAGE.md`
+- `workflow/features/portable-v1/README.md`
+- `workflow/features/portable-v1/evidence/verification.md`
+- `workflow/features/portable-v1/review/independent-3.md`
+- `workflow/features/portable-v1/review/independent-4.md`
+
+Explanation:
+
+Admit the standalone technical implementation after two fresh independent
+CLEAN reviews of exact evidence head `6aeecae`. Preserve real-consumer schema,
+behavioral verification, exact dependency pin, release verification, and
+explicit release authorization as separate hard release/compatibility gates.
+
+Verification:
+
+- exact-source Go 1.26.6 development-host matrix recorded in feature evidence
+- independent CLEAN review and independent CLEAN double-check
+- final documentation diff and repository cleanliness checks
+
+Risks / non-goals:
+
+- Technical admission does not create a tag, release, or compatibility promise.
+- No push, merge, PR, tag, release, deployment, live request, or GOTTH Board
+  mutation is performed by this admission commit.
+
 ### 2026-09-05 23:09 CDT — Preserve every combined raw cause
 
 Implementation commit: `ac7616b18b6d31282c1c402f7f30353bc6006f9e`.

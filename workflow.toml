@@ -27,13 +27,13 @@ slug = "portable-v1"
 name = "Implement consumer-neutral portability streaming"
 namespace = "portability"
 parent = ""
-state = "in_progress"
+state = "done"
 risk = "high"
 assurance = "traceable-tests"
 created_at = "2026-09-03T15:45:00Z"
 activated_at = "2026-09-03T15:45:00Z"
-updated_at = "2026-09-03T15:45:00Z"
-completed_at = ""
+updated_at = "2026-09-06T04:23:29Z"
+completed_at = "2026-09-06T04:23:29Z"
 folder = "workflow/features/portable-v1"
 source_path = "pkg/portability"
 worktree = "/tmp/gotth-portability-worktrees/v1-portability"
@@ -42,7 +42,7 @@ scope = ["Versioned opaque streaming format", "Integrity manifest", "Compatibili
 non_goals = ["Application schema", "Authorization or disclosure policy", "Database or transport", "Encryption or compression", "Multi-record atomicity"]
 affected_files = ["**"]
 invariants = ["Payloads are never logged", "No record is committed before its digest passes", "Only a validated footer plus EOF proves completeness", "No remote or live system is mutated"]
-acceptance = ["Requirements trace to code and evidence", "Format, vet, build, race, coverage, fuzz, external-consumer, performance, and worker Judge gates pass", "Independent final review remains pending"]
+acceptance = ["Requirements trace to code and evidence", "Format, vet, build, race, coverage, fuzz, external-consumer, performance, and worker Judge gates pass", "Independent CLEAN review and CLEAN double-check pass"]
 
 [feature.portable-v1.rollback]
 strategy = "revert_local_feature_commits"

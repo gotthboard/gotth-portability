@@ -551,6 +551,7 @@ repair. Final admission remains outside worker authority.
 ## Remaining gate
 
 No actual downstream consumer schema or dependency pin exists. Inventing one
-would defeat portability's consumer-owned boundary. That product integration
-is the remaining blocker; workflow stays `in_progress`, and the package remains
-unreleased. The orchestrator owns any further independent review and admission.
+would defeat portability's consumer-owned boundary. Two fresh independent
+reviews of exact evidence head `6aeecae` returned CLEAN, so the standalone
+technical feature is `done`. The package remains unreleased; real consumer
+integration and an exact pin remain hard release and compatibility gates.
