@@ -1,20 +1,42 @@
 # Performance admission
 
-## Decision
+## Repair-cycle verification
 
-This revision corrects allocation shape; it makes no runtime speedup claim. The
-direct streaming mechanism performs one bounded-buffer pass over each payload
-on export and import and hashes each payload byte once per pass. Empty records
-do not allocate a payload buffer. The first non-empty record allocates one
-32 KiB buffer, which the exporter/importer retains and reuses. Empty records
-are not allocation-free: frame metadata, hash state, and callback machinery
-produce the measured per-record allocations below.
+Exact source `efa533ae2c212e5a94c983ec3ab512d267dd65a2` passed fresh
+performance and benchmark gates in the isolated clean `development` clone
+`/tmp/gotth-portability-efa533a.bmHfmt/repo` using Go 1.26.6 on an AMD EPYC
+7551P. The failure-classification repair does not change successful payload
+processing, and this run makes no cross-host speedup claim.
+
+End-to-end medians were 2.470 us for an empty archive, 20.650 us for one 1 KiB
+record, 4.511955 ms for 16 x 64 KiB records, 19.085056 ms for 4 x 1 MiB
+records, and 2.551447 ms for 1,000 empty records. Five 500 ms benchmark samples
+preserved the prior allocation shape: 304 B/3 allocations for zero-record
+export, 440 B/9 for one-empty export, 136,304-136,307 B/6,003 for 1,000-empty
+export, and 33,208 B/10 for non-empty export from 1 KiB through 16 MiB. Import
+used 544 B/21, 776 B/35, 232,545-232,546 B/14,021, and 33,544 B/36 for the
+same cases. Timing traces are host-specific; the stable evidence is unchanged
+bounded work and allocation shape.
+
+The exact commands, all samples, clean before/after source status, and hashes
+are retained in `/tmp/gotth-portability-performance-efa533a.log` and
+`/tmp/gotth-portability-benchmark-efa533a.log`.
+
+## Historical baseline decision
+
+The earlier allocation correction made no runtime speedup claim. The direct
+streaming mechanism performs one bounded-buffer pass over each payload on
+export and import and hashes each payload byte once per pass. Empty records do
+not allocate a payload buffer. The first non-empty record allocates one 32 KiB
+buffer, which the exporter/importer retains and reuses. Empty records are not
+allocation-free: frame metadata, hash state, and callback machinery produce the
+measured per-record allocations below.
 
 There is no baseline/candidate runtime claim, so hotspot share `P`, hotspot
 speedup `S_hotspot`, and an Amdahl prediction are not applicable. The admission
 question here is visible allocation shape, not a fabricated speedup.
 
-## Environment and method
+## Historical baseline environment and method
 
 - Linux 7.1.8-arch1-3 x86-64 on an Intel Core i7-7660U.
 - Go 1.26.6-X:nodwarf5; the benchmark harness reported `GOMAXPROCS=4`, while
@@ -38,7 +60,7 @@ go test -mod=readonly -run '^$' -bench '^Benchmark(Export|Import)$' -benchmem -b
 Neither timing command used the race detector. Race-instrumented results are
 correctness evidence only and are not mixed into the timing table.
 
-## End-to-end results
+## Historical baseline end-to-end results
 
 | Workload | Samples | p50 | p95 | p99 | Throughput |
 | --- | ---: | ---: | ---: | ---: | ---: |
@@ -53,7 +75,7 @@ pathological metadata regime. The large workloads show the expected linear
 hash/copy cost. This is a local admission fixture, not a consumer service-level
 objective.
 
-## Allocation and scaling
+## Historical baseline allocation and scaling
 
 | Workload | Export B/op, allocs/op | Import B/op, allocs/op |
 | --- | ---: | ---: |

@@ -1,95 +1,54 @@
 # Verification status
 
-Current worker verification:
+Current worker verification binds exact source
+`efa533ae2c212e5a94c983ec3ab512d267dd65a2`.
 
-- Exact implementation `4596963503d856438ea415dcacce3619f8085436`
-  passed format, diff check, vet, build, race, and coverage in a clean detached
-  clone on `development`; these CPU-heavy gates were not run in the agenthost
-  gateway cgroup.
-- Current source reports 94.8% race-instrumented statement coverage. The new
-  simultaneous commit-failure/cancellation branch is directly covered along
-  with the adjacent sink-only, cancellation-only, and success branches.
-  `ResumeImporter` remains 100%
-  statement-covered with direct argument, limit/checkpoint-order,
-  pre/post-compatibility cancellation, incompatible-cause redaction, no-reader-
-  I/O, and exact-restoration tests. Residual statements are the named
-  defensive malformed-state, impossible-overflow, nil-receiver, and rare
-  delegated-I/O variants visible in the retained function report; they are not
-  characterized as resume or compatibility gaps.
-- Metadata and configured payload limits cover limit-1, limit, limit+1, and
+- Lightweight local checks used `GOMAXPROCS=2` and `-p=1`: focused importer
+  outcome tests, package vet, package build, non-mutating `gofmt -l`, and
+  `git diff --check` all passed.
+- Full verification ran only on `development`, in the isolated clean detached
+  clone `/tmp/gotth-portability-efa533a.bmHfmt/repo`, with Go 1.26.6. Repository
+  `make verify`, an independent full test, race test, coverage test, all four
+  fuzz targets, an external-consumer module, performance samples, and five
+  benchmark samples all passed.
+- Every development trace records the literal command, exact source/tree IDs,
+  toolchain, timestamps, exit status, raw-output hash, and exact `HEAD` plus
+  porcelain-v2 status before and after. Every command began and ended clean at
+  `efa533a`. In particular, `make verify` used the failing, non-mutating
+  `gofmt -l` check and left exact `HEAD` and status unchanged.
+- Statement coverage is 94.9%. `ResumeImporter` remains 100% covered. The four
+  repaired combined outcomes have direct tests: `NewImporter` and
+  `ResumeImporter` compatibility rejection plus cancellation, staged `Write`
+  failure plus cancellation, and `Begin` returning nil/nil plus cancellation.
+  Tests assert the exact class set, every explicit raw cause, redacted public
+  text, checkpoint preservation, and required Abort/Commit behavior.
+- The adjacent importer outcome audit rechecked compatibility-only,
+  cancellation-only, begin-error, begin-stage cleanup, staged-write-only,
+  commit-only, commit-cancellation, and abort-failure paths. Existing
+  classifications remain unchanged outside the four verified repairs.
+- Five-second fuzzing passed 2,344,018 valid roundtrip executions, 1,614,245
+  arbitrary checkpoint executions, 3,094,791 bounded arbitrary archive
+  executions, and 837,707 valid-archive mutation executions. Exact-valid
+  fuzzing requires committed payload/count/chain state and a valid Manifest;
+  invalid mutations cannot produce forbidden commit or completion state.
+- A fresh external module resolved the unreleased package through a local
+  replacement to the exact clean clone, then passed readonly race, vet, and
+  build gates. Its module and consumer test hashes are retained in the trace.
+- Metadata and payload boundary tests cover limit-1, limit, limit+1, and
   materially-beyond cases. Every byte truncation of a representative archive
-  fails without producing a manifest.
-- Bounded-stream tests move a 5 MiB+17 byte payload in writes no larger than
-  32 KiB. V1 has literal empty-archive, non-empty archive, and persistent
-  checkpoint golden tests.
-- Cancellation seam tests cover header/metadata/payload/digest/footer I/O,
-  compatibility, begin, staged write, commit unknown-outcome, and bounded abort.
-  Pre-canceled construction performs no I/O. Begin-with-error tests cover nil
-  and non-nil stages, abort success/failure, and cancellation after the callback;
-  simultaneous begin failure and cancellation retain both `ErrSink` and `ErrIO`
-  without losing raw causes. Nil/error returns after cleanup deadline are also
-  covered. Zero and negative cleanup timeouts prove an already-expired fresh
-  cleanup context returns `ErrSink` without invoking `RecordSink.Abort`.
+  fails without producing a manifest. Bounded streaming uses writes no larger
+  than 32 KiB, and literal V1 archive/checkpoint goldens remain covered.
 - Strict I/O tests cover positive-short nil writes without retry, legal
-  data-plus-error reads, negative/oversized Reader counts, transient empty reads,
-  and the documented no-progress bound.
-- Direct state-boundary tests prove that every documented `WriteRecord` and
-  `Next` preflight failure consumes no record/frame I/O and permits retry, while
-  failure after partial output/input poisons the object.
-- Complexity contracts account for constant-time rejection, skipped delegated
-  calls, aggregate bounded exact-read cost, record metadata/payload/digest/EOF
-  I/O, sink callbacks, local/retained buffers, delegated auxiliary space, and
-  checkpoint validation's temporary canonical header allocation. Public record
-  operations and their adjacent implementation units distinguish rejection,
-  footer, failure, and successful-record paths.
-- Every public sentinel is injected through export Reader/Writer,
-  compatibility, begin, staged write, commit, and abort callbacks. Only the
-  library classification participates in `errors.Is`; `Causer` retains explicit
-  access to the raw potentially sensitive cause while the library error string
-  remains redaction-safe.
-- Against unchanged runtime baseline `d22c2de`, sequential five-second fuzz
-  admissions passed 19,653 valid roundtrip
-  inputs, 7,696 arbitrary checkpoint inputs, 15,923 bounded arbitrary archive
-  inputs, and 8,283 valid-archive mutation inputs. Exact-valid fuzzing requires
-  one committed map entry even for an empty payload, exact bytes/counts/chain,
-  zero aborts, Manifest, and EOF. Invalid mutations assert no forbidden commit,
-  completion, or Manifest.
-- Against unchanged runtime baseline `d22c2de`, fifty consecutive
-  race-instrumented suite runs pass.
-- Against unchanged runtime baseline `d22c2de`, a separate external module
-  imports the public package and passes race, vet, and build gates using a local
-  replacement for this unreleased source. Every
-  retained trace records exact detached HEAD and clean status, source hashes,
-  toolchain, literal command, start/end times, exit status, raw-output hash, and
-  inline raw output. Separate raw files are retained and hashed. The external
-  proof additionally records module hashes and replacement resolution. Helper
-  scripts named by trace commands are also retained and hashed.
-- Unchanged-runtime performance percentiles, allocation evidence, and
-  limitations are in `docs/performance.md`.
-- Graphify 0.9.32 extracted 274 nodes and 677 edges in 14 communities from
-  baseline `d22c2de`. Its report and provenance trace bind to that
-  commit, and it has no self-loop or exact duplicate edge; consequential
-  begin/abort and fuzz-oracle edges were verified directly in source when
-  ambiguous graph names existed.
+  data-plus-error reads, invalid Reader counts, transient empty reads, and the
+  no-progress bound. State-boundary tests prove preflight failures are
+  retryable without record/frame I/O while failures after progress poison the
+  object.
+- Performance and allocation evidence for exact source is in
+  `docs/performance.md`. No speedup or cross-host timing claim is made.
+- The historical Graphify result still binds runtime baseline `d22c2de`; no
+  exact-source graph claim is made for this localized repair.
 
-The fresh completion audit found and corrected loss of a simultaneous
-`RecordSink.Commit` error when the callback also canceled its context. The
-result retains `ErrSink`, `ErrIO`, and both explicit causes without aborting or
-advancing the checkpoint. Three exact-source three-second fuzz probes passed:
-archive roundtrip (1,492,552 executions), checkpoint parser (2,178,216), and
-bounded arbitrary archive (1,866,784). The mutation-oracle fuzz target, fresh
-external-consumer proof, and fresh performance/benchmark gates were not rerun
-before expedited handoff; the prior evidence remains historical rather than a
-claim about `4596963`.
-
-Worker and independent cold reviews drove checkpoint, recovery, cancellation,
-callback-identity, I/O-contract, retry/poisoning contract, cost-bound, wire,
-allocation, fuzz-oracle, and evidence corrections. Performance,
-external-consumer, and graph evidence remain the `d22c2de` runtime baseline.
-Prior fresh verify, 94.7% race coverage, focused race x3, four sequential
-three-second fuzz probes, exact changelog provenance, and clean-clone evidence
-bind source `9a03924`. Its only executable change suppresses Abort when the
-fresh cleanup context is already expired. A real
-downstream consumer schema/pin does not yet exist; workflow therefore remains
-`in_progress` and unreleased. Independent final admission remains
-orchestrator-owned.
+All retained exact-source artifacts are indexed and hashed in
+`workflow/features/portable-v1/evidence/verification.md`. A real downstream
+consumer schema and dependency pin still do not exist. Workflow remains
+`in_progress` and unreleased; final admission is orchestrator-owned.

@@ -8,6 +8,53 @@ uses the named commit's Git author time, rendered to the minute in CDT.
 
 ## Unreleased
 
+### 2026-09-05 22:39 CDT — Preserve combined importer outcomes
+
+Implementation commit: `efa533ae2c212e5a94c983ec3ab512d267dd65a2`.
+Evidence commit: this documentation-only commit. The heading uses the verified
+implementation commit author time.
+
+Affected files:
+
+- `Makefile`
+- `README.md`
+- `docs/CHANGELOG.md`
+- `docs/architecture.md`
+- `docs/implementation-spec.md`
+- `docs/performance.md`
+- `docs/runtime-boundary.md`
+- `docs/verification.md`
+- `pkg/portability/hardening_test.go`
+- `pkg/portability/import.go`
+- `pkg/portability/types.go`
+- `workflow/COVERAGE.md`
+- `workflow/features/portable-v1/evidence/verification.md`
+
+Explanation:
+
+Preserve semantic failures when importer callbacks also cancel: compatibility
+rejection remains primary `ErrIncompatible`, while staged-write failure and a
+nil/nil Begin remain primary `ErrSink`; every combined result also retains
+`ErrIO` and all available explicit causes without leaking callback text. Make
+repository formatting verification fail on unformatted Go without mutating the
+tree.
+
+Verification:
+
+- lightweight local focused test, vet, build, format-list, and diff checks
+- exact clean detached `development` clone on Go 1.26.6 passed `make verify`,
+  full, race, 94.9% coverage, four fuzz, external-consumer, performance, and
+  benchmark gates
+- every remote gate retained identical exact HEAD and clean porcelain-v2 status
+  before and after
+
+Risks / non-goals:
+
+- The adjacent audit was limited to importer outcome-classification paths; no
+  broader callback or protocol refactor was admitted.
+- The V1 wire format and public API are unchanged. Workflow stays `in_progress`
+  and final admission remains orchestrator-owned.
+
 ### 2026-09-05 22:07 CDT — Preserve simultaneous commit outcomes
 
 Implementation commit: `4596963503d856438ea415dcacce3619f8085436`.

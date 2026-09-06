@@ -24,10 +24,13 @@
   `9a0392433796c26f12b1a83e04becbf9799a3c41`.
 - Simultaneous commit-outcome correction:
   `4596963503d856438ea415dcacce3619f8085436`.
+- Combined importer-outcome and non-mutating verification correction:
+  `efa533ae2c212e5a94c983ec3ab512d267dd65a2`.
 - Branch/worktree: `feature/v1-portability` at
   `/tmp/gotth-portability-worktrees/v1-portability`.
-- No push, PR, tag, release, deployment, live database, secret, or remote state
-  was touched.
+- No push, PR, tag, release, deployment, live database, secret, GOTTH Board, or
+  persistent remote repository state was touched. Development verification used
+  only a disposable `/tmp` bundle, clone, consumer module, and evidence files.
 
 ## Boundary decisions
 
@@ -40,15 +43,21 @@ Cancellation observed after `Commit` is the same unknown outcome. Pre-commit
 failure uses a fresh cleanup context bounded by `AbortTimeout`. A stage returned
 with a Begin error is cleaned up, and cleanup deadline expiry is an `ErrSink`
 failure even after a nil Abort result. Cancellation observed after a Begin error
-is retained as `ErrIO` alongside the primary `ErrSink` classification. SHA-256
-provides integrity, not producer authentication. `Causer.Cause` is raw and
-potentially sensitive; only `Error()` is redaction-safe.
+is retained as `ErrIO` alongside the primary `ErrSink` classification. The same
+composition rule preserves compatibility rejection, staged-write failure, and
+nil-stage sink failure when cancellation is observed. SHA-256 provides
+integrity, not producer authentication. `Causer.Cause` is raw and potentially
+sensitive; only `Error()` is redaction-safe.
 
 ## Toolchain and capacity
 
-- Go: `go1.26.6-X:nodwarf5 linux/amd64`.
+- Local focused checks: `go1.26.6-X:nodwarf5 linux/amd64` with
+  `GOMAXPROCS=2` and `-p=1`.
+- Development gates: `go1.26.6 linux/amd64` selected with
+  `GOTOOLCHAIN=go1.26.6`.
 - Graphify: 0.9.32, local code-only extraction.
-- Root preflight: 5% bytes and 1% inodes used; no capacity threshold approached.
+- Development `/tmp` preflight: 2% bytes and 4% inodes used; no capacity
+  threshold approached.
 - gopls: N/A on the canonical host because the binary is absent. Direct source,
   compiler, vet, tests, coverage, fuzzing, and Graphify supplied the required
   evidence without installing or starting another tool.
@@ -56,6 +65,72 @@ potentially sensitive; only `Error()` is redaction-safe.
   were small enough for bounded direct reads and `/usr/bin/rg`.
 
 ## Correctness gates
+
+The repair cycle started from exact clean local HEAD
+`182cd34bd5867fdb77400a505f5a6386617126ee`. Exact implementation
+`efa533ae2c212e5a94c983ec3ab512d267dd65a2` was then transferred as a complete
+Git bundle, without pushing a ref, and checked out detached in the isolated
+clean clone `/tmp/gotth-portability-efa533a.bmHfmt/repo` on `development`.
+
+With Go 1.26.6, repository `make verify`, a separate full test, race test,
+coverage test, all four five-second fuzz targets, a fresh external-consumer
+module, performance samples, and five benchmark samples all passed. Coverage
+is 94.9%. The fuzz targets completed 2,344,018 roundtrip, 1,614,245 checkpoint,
+3,094,791 bounded arbitrary archive, and 837,707 mutation-oracle executions.
+The external module passed readonly race, vet, and build. Performance and
+allocation results are recorded in `docs/performance.md` without a speedup
+claim.
+
+Every gate trace records exact source and tree IDs, Go version, literal command,
+timestamps, command status, integrity status, raw-output hash, and exact HEAD
+plus porcelain-v2 status before and after. All command and integrity statuses
+are zero; all before/after snapshots are clean and remain at `efa533a`. The
+`make verify` trace specifically proves the new non-mutating `gofmt -l` check
+left HEAD and status unchanged.
+
+Focused tests cover every repaired combined outcome: both importer constructors
+retain primary `ErrIncompatible`, additional `ErrIO`, and both explicit causes
+when compatibility rejects while canceling; staged `Write` failure plus
+cancellation retains primary `ErrSink`, additional `ErrIO`, both causes,
+bounded Abort, and the prior checkpoint without leaking callback text; and
+nil/nil `Begin` plus cancellation retains `ErrSink` and `ErrIO`. The adjacent
+audit rechecked the existing compatibility-only, cancellation-only,
+begin-error, stage-cleanup, staged-write-only, commit, and abort classifications
+without widening this repair.
+
+| Exact source `efa533a` retained artifact | SHA-256 |
+| --- | --- |
+| `/tmp/gotth-portability-verify-efa533a.log` | `9f2612aa3b0b2f6f20a8f15f5377e442e1df952c440368e93e14a780bd36ce4a` |
+| `/tmp/gotth-portability-verify-efa533a.raw.log` | `e6594ca0ed2b6cb20646d19ad57fa535f6b16aac3c4c9cf1b01e499fe2976d92` |
+| `/tmp/gotth-portability-full-efa533a.log` | `6f4936e94130fe7417ead58be8062eab8caeccfc14ba2e23fd9a21f13e7232e8` |
+| `/tmp/gotth-portability-full-efa533a.raw.log` | `fca4dbd67933f520eabc77a919a9febfdee997cb847b69a7dff93ec20dce83dd` |
+| `/tmp/gotth-portability-race-efa533a.log` | `77b4a9b018be84dda4f792b1e97fc08704fd1fdf5ffd75f6fcc1757e6e2a7a86` |
+| `/tmp/gotth-portability-race-efa533a.raw.log` | `52e6aea7a3de30568c1be36f5491a8a72199607abc145a35f7fba44ea652812f` |
+| `/tmp/gotth-portability-coverage-efa533a.log` | `3ac7b71a177477cc96b459220dcbf3e0919e364ca46b5b0f6bfbe29e6b7f8a8a` |
+| `/tmp/gotth-portability-coverage-efa533a.raw.log` | `d7c729379f7169d1cc7a8cf98a06eaafd679a47a6be09b5f23f5839d01d2a4ec` |
+| `/tmp/gotth-portability-coverage-efa533a.out` | `e219a927509de8b3399684f7b4221a3d7bdad183f373a11c9dcf245d55b662f6` |
+| `/tmp/gotth-portability-coverage-functions-efa533a.log` | `e3cbd02b197df791723d614a957c50d30899d11902f1ce06fa5056586c63a13e` |
+| `/tmp/gotth-portability-coverage-functions-efa533a.raw.log` | `ee53d74c08ea415fbda18618f5d87b5b6afc07aed20ca5f0e3ad0ef0724d5e9b` |
+| `/tmp/gotth-portability-fuzz-roundtrip-efa533a.log` | `471736aa7a288dc5f23f1005b28890dd5e1b92cb67c3a8389a57a6eab6a72895` |
+| `/tmp/gotth-portability-fuzz-roundtrip-efa533a.raw.log` | `e39fd47a1fba25047da7cd094ebe85ed781c2f59b50e1869a66bed72dd909687` |
+| `/tmp/gotth-portability-fuzz-checkpoint-efa533a.log` | `2d3d7c31dc01ec37e6b727375e02949debc7a2434f9004ebeab333a0020852f5` |
+| `/tmp/gotth-portability-fuzz-checkpoint-efa533a.raw.log` | `63537087f3e78abdffd8f76044c35b1e221af17f7de60126da3a4a42474eed6c` |
+| `/tmp/gotth-portability-fuzz-arbitrary-efa533a.log` | `aba9642a7787e47ac5c557fce1dfaf6e38a78bf132e019c3e312e389e27f6501` |
+| `/tmp/gotth-portability-fuzz-arbitrary-efa533a.raw.log` | `a670c33d04c0c140529f2f1ba1739a6a2a8e2b02100c6c6ae103bc6eb0cfe2dc` |
+| `/tmp/gotth-portability-fuzz-mutation-efa533a.log` | `c3cac58f58a5fc975b04f0a4204a4b5dffcc8af4c4354b687df81a183725f46f` |
+| `/tmp/gotth-portability-fuzz-mutation-efa533a.raw.log` | `dc1196308022fdbe7f9fc26995589ff92337eb63b2ce1cc78c0c9df1243fb88b` |
+| `/tmp/gotth-portability-external-efa533a.log` | `1a2b927e309044594ec8362e354e100a024ee9e08b1353eac1b89dcfb54dcb26` |
+| `/tmp/gotth-portability-external-efa533a.raw.log` | `3b7b2cfdda7553b0b6f3922039b87595be36ff56b1c788b39aac28296bff1c20` |
+| `/tmp/gotth-portability-performance-efa533a.log` | `cec79f6173abf7a654cc6a82b24f8195e6699c3c0623875c97ae76e96a31af90` |
+| `/tmp/gotth-portability-performance-efa533a.raw.log` | `8dc3d03f777189e2da215943edfc44a386e708053605e9f6dda04abd5db9ac36` |
+| `/tmp/gotth-portability-benchmark-efa533a.log` | `25ae2248a987a90205728a0db74e1ea018140a44a4e81c577b76a03c173429aa` |
+| `/tmp/gotth-portability-benchmark-efa533a.raw.log` | `d2281ffe7dbe315b38cfd47efdb240a203fd4f55661148aac93fe002542c7e32` |
+| `/tmp/gotth-portability-development-summary-efa533a.txt` | `5c726f21134b46a06215e953bb08379581cddf1c3d24b7e84fb23eb16fbfc1f7` |
+| `/tmp/gotth-portability-artifacts-efa533a.sha256` | `29060eb3b187e879aac5f984c25d0182b2d190e62ae1c5a7515be2811e7ec830` |
+| `/tmp/gotth-portability-development-gates-efa533a.sh` | `a25e9877a6a4e9aee6d0e35e300a4b3510a2593644eb2ab5dc6dd28f49c42a6a` |
+| `/tmp/gotth-portability-efa533a.bundle` | `75e7ca1ef7903b1fd2487b023ee2d6ac8fc7f19a6459492cf14008b1f520455d` |
+
+### Previous completion audit
 
 Fresh completion audit of exact implementation
 `4596963503d856438ea415dcacce3619f8085436` used an isolated clean detached
@@ -381,6 +456,16 @@ adds an expected-red/green zero-callback regression test for zero and negative
 timeouts. Fresh exact-source traces bind full verification, 94.7% race
 coverage, focused race x3, four fuzz probes, and a clean detached clone. This
 final evidence commit remains documentation-only.
+Independent review then found four remaining combined-outcome losses at exact
+head `182cd34`: compatibility rejection in both importer constructors, staged
+write failure, and nil/nil Begin could be suppressed by callback cancellation.
+It also found that `make verify` mutated source through `gofmt -w`. Exact source
+`efa533a` composes each semantic failure with `ErrIO`, preserves all available
+explicit causes behind redacted errors, keeps staged cleanup and checkpoint
+behavior intact, and changes verification to a failing non-mutating `gofmt -l`
+check. The adjacent outcome audit found no further importer classification
+change to admit. Full exact-source development gates and before/after clean
+traces bind the repair. Final admission remains outside worker authority.
 
 ## Remaining gate
 
